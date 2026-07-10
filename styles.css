@@ -97,6 +97,24 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.viewer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-mode-select {
+  background: var(--slate);
+  border: 1px solid var(--slate-border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
 }
 
 .chart-wrap {
@@ -383,11 +401,27 @@ body {
 .alert-item.warn { background: var(--amber-bg); color: var(--amber); border-color: rgba(224,169,75,0.4); }
 .alert-item.error { background: var(--red-bg); color: var(--red); border-color: rgba(224,97,90,0.4); }
 
+.table-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.table-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-dim);
+}
+
 .table-scroll {
   overflow-x: auto;
   border: 1px solid var(--slate-border);
   border-radius: 10px;
 }
+
+.table-scroll[hidden] { display: none; }
 
 .flight-table {
   border-collapse: collapse;
@@ -481,9 +515,10 @@ body {
 }
 
 @media print {
-  .topbar, .action-row, .add-leg-btn, .remove-leg-btn, #fullscreenBtn, .back-btn { display: none !important; }
+  .topbar, .action-row, .add-leg-btn, .remove-leg-btn, #fullscreenBtn, .back-btn, #toggleTableBtn { display: none !important; }
   body { background: #fff; color: #000; }
   .panel, .leg-card, .result-box, .chart-wrap { border-color: #999; background: #fff; }
   .viewer-pane { border-left: none; }
   .workspace { flex-direction: column; }
+  .table-scroll[hidden] { display: block !important; overflow-x: visible; }
 }
