@@ -64,7 +64,20 @@
               <option value="weight">Peso real dos pax (kg)</option>
             </select>
           </label>
+          <label class="field">
+            <span>CG long. do peso vazio (STA mm)</span>
+            <input type="text" inputmode="numeric" enterkeyhint="next" id="bewArmMm" placeholder="ex.: 5500">
+          </label>
+          <label class="field">
+            <span>Braço médio dos pax (STA mm)</span>
+            <input type="text" inputmode="numeric" enterkeyhint="next" id="paxArmMm" value="4601">
+          </label>
+          <label class="field">
+            <span>Braço da carga/bagagem (STA mm)</span>
+            <input type="text" inputmode="numeric" enterkeyhint="done" id="cargoArmMm" value="7700">
+          </label>
         </div>
+        <p class="hint-text">Para o gráfico de peso e balanceamento, informe o CG do peso vazio (Chart C/E da aeronave). Braços de referência do RFM: fileiras de pax 3415 / 4789 / 5600 mm (média 4601), bagageiro 7700 mm, tripulação 2820 mm.</p>
       </section>
 
       <section class="panel" id="flightPanel">
@@ -154,8 +167,14 @@
 
     <section class="viewer-pane">
       <div class="viewer-header">
-        <h2 class="panel-title">Evolução do peso</h2>
-        <button class="ghost-btn small-btn" id="fullscreenBtn" type="button">Tela cheia</button>
+        <h2 class="panel-title" id="chartTitle">Evolução do peso</h2>
+        <div class="viewer-header-actions">
+          <select id="chartModeSelect" class="chart-mode-select">
+            <option value="weight">Evolução do peso</option>
+            <option value="cg">Peso e balanceamento (CG)</option>
+          </select>
+          <button class="ghost-btn small-btn" id="fullscreenBtn" type="button">Tela cheia</button>
+        </div>
       </div>
       <div class="chart-wrap">
         <canvas id="weightChart"></canvas>

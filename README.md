@@ -32,6 +32,19 @@ movimentação de pax/carga em cada parada.
   de cada perna convertem sozinhos para kg assim que você sai do campo — sem
   conta de cabeça. Os parâmetros da aeronave (BEW, tripulação, combustível
   mínimo etc.) continuam sempre em kg.
+- **Gráfico de peso e balanceamento (CG)**: o viewer alterna entre "Evolução
+  do peso" e o envelope de CG longitudinal certificado do RFM (Figuras 1-1 —
+  base 6.400 kg, Supl. 50 = 6.800 kg, Supl. 90 = 7.000 kg, escolhido pela
+  categoria de peso). Informando o CG do peso vazio (Chart C/E da aeronave),
+  cada perna é plotada no envelope com os pontos de decolagem (●) e pouso (○),
+  e o app alerta "CG fora do envelope" por perna. Braços do RFM Seção 6:
+  tripulação STA 2820 mm, fileiras de pax 3415/4789/5600 mm (média 4601,
+  editável), bagageiro 7700 mm; braço do combustível interpolado dos exemplos
+  de carregamento do RFM (6206–6228 mm). O cálculo reproduz exatamente o
+  exemplo (a) da Seção 6 do RFM (TOW 4730 kg @ 5390,0 mm; LW 4330 kg @
+  5314,1 mm).
+- Tabela do voo com botão mostrar/ocultar (preferência persistida); o PDF
+  sempre inclui a tabela completa.
 - Compartilha a tabela + gráfico via impressão (botão "Compartilhar PDF").
 - Persiste o formulário em `localStorage` (`aw139_pesos_form_v1`) e funciona
   100% offline como PWA (`manifest.webmanifest` + `sw.js`, cache-first).

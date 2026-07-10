@@ -4,6 +4,43 @@
   var FORM_KEY = 'aw139_pesos_form_v1';
   var SHARED_KEY = 'aw139_companion_shared_context_v1';
   var TABLE_VISIBLE_KEY = 'aw139_pesos_table_visible_v1';
+  var CHART_MODE_KEY = 'aw139_pesos_chart_mode_v1';
+
+  // Envelopes de CG longitudinal — AW139 RFM 139G0290X002, Figuras 1-1
+  // (E.A.S.A. Approved). Pontos [STA mm, peso kg]. Selecionado pela
+  // categoria de peso da aeronave (Supl. 50 = 6800 kg, Supl. 90 = 7000 kg).
+  var CG_ENVELOPES = {
+    '6400': {
+      maxKg: 6400, minKg: 4400, label: 'RFM Fig. 1-1 (Rev. 21, até 6.400 kg)',
+      points: [[5071, 4400], [5000, 4660], [5000, 5170], [5180, 6400], [5504, 6400], [5595, 4850], [5536, 4400]]
+    },
+    '6800': {
+      maxKg: 6800, minKg: 4400, label: 'RFM Supl. 50 Fig. 1-1 (6.800 kg)',
+      points: [[5071, 4400], [5000, 4660], [5000, 5170], [5238, 6800], [5480, 6800], [5595, 4850], [5536, 4400]]
+    },
+    '7000': {
+      maxKg: 7000, minKg: 4400, label: 'RFM Supl. 90 Fig. 1-1 (7.000 kg)',
+      points: [[5071, 4400], [5000, 4660], [5000, 5170], [5266, 7000], [5469, 7000], [5595, 4850], [5536, 4400]]
+    }
+  };
+  var MAST_STA_MM = 5000;
+
+  function getCgEnvelope(aircraft) {
+    return CG_ENVELOPES[String(aircraft.mtowCategory)] || CG_ENVELOPES['7000'];
+  }
+  var CREW_ARM_MM = 2820; // STA dos assentos de piloto/copiloto (RFM Seção 6, Chart E)
+
+  // Braço longitudinal do combustível × quantidade, derivado dos exemplos de
+  // carregamento do RFM Seção 6 (6-11/6-12) e do combustível inutilizável do
+  // Chart D. Interpolação linear; acima de 1000 kg extrapola a última taxa.
+  var FUEL_ARM_TABLE = [
+    [0, 6206],
+    [100, 6210],
+    [300, 6210],
+    [500, 6212],
+    [800, 6217],
+    [1000, 6228]
+  ];
 
   var legsContainer = document.getElementById('legsContainer');
   var legTemplate = document.getElementById('legTemplate');
@@ -56,6 +93,36 @@
   function truncateLabel(s, n) {
     if (!s) return '';
     return s.length > n ? s.slice(0, n - 1) + '…' : s;
+  }
+
+  function fuelArmMm(fuelKg) {
+    var f = Math.max(0, fuelKg);
+    var t = FUEL_ARM_TABLE;
+    var last = t[t.length - 1];
+    if (f >= last[0]) {
+      var prev = t[t.length - 2];
+      var slope = (last[1] - prev[1]) / (last[0] - prev[0]);
+      return last[1] + (f - last[0]) * slope;
+    }
+    for (var i = 1; i < t.length; i++) {
+      if (f <= t[i][0]) {
+        var a = t[i - 1], b = t[i];
+        return a[1] + (b[1] - a[1]) * (f - a[0]) / (b[0] - a[0]);
+      }
+    }
+    return t[0][1];
+  }
+
+  function pointInPolygon(x, y, poly) {
+    var inside = false;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      var xi = poly[i][0], yi = poly[i][1];
+      var xj = poly[j][0], yj = poly[j][1];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) {
+        inside = !inside;
+      }
+    }
+    return inside;
   }
 
   // ---------------------------------------------------------------------
@@ -301,7 +368,10 @@
       maxLandingKg: numWithDefault('maxLandingKg', parseNum(document.getElementById('mtowCategory').value)),
       paxWeightKg: numWithDefault('paxWeightKg', 90),
       minLandingFuelKg: numWithDefault('minLandingFuelKg', 240),
-      paxMode: getPaxMode()
+      paxMode: getPaxMode(),
+      bewArmMm: parseNum(document.getElementById('bewArmMm').value),
+      paxArmMm: numWithDefault('paxArmMm', 4601),
+      cargoArmMm: numWithDefault('cargoArmMm', 7700)
     };
   }
 
@@ -455,6 +525,31 @@
         }
       }
 
+      var cgTowMm = null, cgLwMm = null;
+      if (isFinite(aircraft.bewArmMm)) {
+        var cgEnv = getCgEnvelope(aircraft);
+        var zfwMoment = numOr0(aircraft.bewKg) * aircraft.bewArmMm +
+          aircraft.crewKg * CREW_ARM_MM +
+          paxContribution(paxOnBoard, aircraft) * aircraft.paxArmMm +
+          cargoOnBoard * aircraft.cargoArmMm;
+        if (tow > 0) cgTowMm = (zfwMoment + startFuel * fuelArmMm(startFuel)) / tow;
+        if (lw > 0) cgLwMm = (zfwMoment + Math.max(0, fuelAtLanding) * fuelArmMm(fuelAtLanding)) / lw;
+
+        var checkEnvelope = function (cg, weight, phase) {
+          if (cg === null || !isFinite(cg)) return;
+          if (weight > cgEnv.maxKg) return; // já coberto pela validação de MTOW
+          if (weight < cgEnv.minKg) {
+            legIssues.push({ level: 'warn', message: 'Peso ' + phase + ' abaixo do mínimo do envelope (' + fmt(cgEnv.minKg) + ' kg)' });
+            return;
+          }
+          if (!pointInPolygon(cg, weight, cgEnv.points)) {
+            legIssues.push({ level: 'error', message: 'CG fora do envelope ' + phase + ' (STA ' + fmt(cg) + ' mm)' });
+          }
+        };
+        checkEnvelope(cgTowMm, tow, 'na decolagem');
+        checkEnvelope(cgLwMm, lw, 'no pouso');
+      }
+
       var paxUnitSuffix = aircraft.paxMode === 'weight' ? ' kg' : '';
       var paxOff = 0, paxOn = 0, cargoOffKg = 0, cargoOnKg = 0, refuelKg = 0, nextFuelAtStart = null;
       if (!isLast) {
@@ -502,6 +597,8 @@
         marginToMtow: marginToMtow,
         watMargin: watMargin,
         refuelKg: refuelKg,
+        cgTowMm: cgTowMm,
+        cgLwMm: cgLwMm,
         issues: legIssues,
         status: worst
       });
@@ -576,15 +673,29 @@
     });
   }
 
+  function getChartMode() {
+    var sel = document.getElementById('chartModeSelect');
+    return sel ? sel.value : 'weight';
+  }
+
   function renderLegend(aircraft, watMax) {
     var legend = document.getElementById('chartLegend');
-    var items = [
-      { color: 'rgba(70,194,186,1)', label: 'TOW → LW (perna)' },
-      { color: '#9fb2c3', label: 'Parada (pax/carga/reabastecimento)' },
-      { color: '#e0615a', label: 'MTOW (' + fmt(aircraft.mtowCategory) + ' kg)' },
-      { color: '#e0a94b', label: 'Máx. pouso (' + fmt(aircraft.maxLandingKg) + ' kg)' }
-    ];
-    if (watMax !== null) items.push({ color: '#8ab4f8', label: 'WAT máx. (' + fmt(watMax) + ' kg)' });
+    var items;
+    if (getChartMode() === 'cg') {
+      items = [
+        { color: '#e0615a', label: 'Envelope CG — ' + getCgEnvelope(aircraft).label },
+        { color: 'rgba(70,194,186,1)', label: '● TOW → ○ LW (por perna)' },
+        { color: '#58c78a', label: 'Mastro (STA 5000 mm)' }
+      ];
+    } else {
+      items = [
+        { color: 'rgba(70,194,186,1)', label: 'TOW → LW (perna)' },
+        { color: '#9fb2c3', label: 'Parada (pax/carga/reabastecimento)' },
+        { color: '#e0615a', label: 'MTOW (' + fmt(aircraft.mtowCategory) + ' kg)' },
+        { color: '#e0a94b', label: 'Máx. pouso (' + fmt(aircraft.maxLandingKg) + ' kg)' }
+      ];
+      if (watMax !== null) items.push({ color: '#8ab4f8', label: 'WAT máx. (' + fmt(watMax) + ' kg)' });
+    }
     legend.innerHTML = items.map(function (it) {
       return '<span class="legend-item"><span class="swatch" style="background:' + it.color + '"></span>' + escapeHtml(it.label) + '</span>';
     }).join('');
@@ -723,13 +834,197 @@
     });
   }
 
-  function redrawCharts() {
-    if (!lastCalcResult) return;
-    var criticalIndex = computeCriticalIndex(lastCalcResult.results, lastCalcResult.aircraft);
-    drawChart(document.getElementById('weightChart'), lastCalcResult.results, lastCalcResult.aircraft, lastCalcResult.watMax, criticalIndex);
-    if (!fullscreenOverlay.hidden) {
-      drawChart(document.getElementById('weightChartFullscreen'), lastCalcResult.results, lastCalcResult.aircraft, lastCalcResult.watMax, criticalIndex);
+  function setupCanvas(canvas) {
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.parentElement.getBoundingClientRect();
+    var w = Math.max(rect.width, 10);
+    var h = Math.max(rect.height, 10);
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+  }
+
+  function drawCgChart(canvas, results, aircraft) {
+    var c = setupCanvas(canvas);
+    var ctx = c.ctx, w = c.w, h = c.h;
+
+    if (!isFinite(aircraft.bewArmMm)) {
+      ctx.fillStyle = '#9fb2c3';
+      ctx.font = '13px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Informe o CG do peso vazio (STA mm) no painel Aeronave', w / 2, h / 2 - 10);
+      ctx.fillText('para plotar o voo no envelope da Fig. 1-1 do RFM.', w / 2, h / 2 + 10);
+      return;
     }
+
+    var cgEnv = getCgEnvelope(aircraft);
+    var padding = { top: 34, right: 20, bottom: 40, left: 58 };
+    var plotW = w - padding.left - padding.right;
+    var plotH = h - padding.top - padding.bottom;
+
+    var xMin = 4900, xMax = 5700;
+    var yMin = 4200, yMax = cgEnv.maxKg + 200;
+    results.forEach(function (r) {
+      [ [r.cgTowMm, r.tow], [r.cgLwMm, r.lw] ].forEach(function (p) {
+        if (p[0] !== null && isFinite(p[0])) {
+          if (p[0] < xMin + 20) xMin = p[0] - 40;
+          if (p[0] > xMax - 20) xMax = p[0] + 40;
+          if (p[1] > yMax - 50) yMax = p[1] + 150;
+          if (p[1] < yMin + 50) yMin = p[1] - 150;
+        }
+      });
+    });
+
+    function xPix(sta) { return padding.left + (sta - xMin) / (xMax - xMin) * plotW; }
+    function yPix(kg) { return padding.top + (1 - (kg - yMin) / (yMax - yMin)) * plotH; }
+
+    // grade
+    ctx.strokeStyle = '#182838';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#9fb2c3';
+    ctx.font = '10px Inter, system-ui, sans-serif';
+    var gx;
+    for (gx = Math.ceil(xMin / 100) * 100; gx <= xMax; gx += 100) {
+      ctx.beginPath();
+      ctx.moveTo(xPix(gx), padding.top);
+      ctx.lineTo(xPix(gx), h - padding.bottom);
+      ctx.stroke();
+      ctx.textAlign = 'center';
+      ctx.fillText(String(gx), xPix(gx), h - padding.bottom + 14);
+    }
+    var gy;
+    for (gy = Math.ceil(yMin / 200) * 200; gy <= yMax; gy += 200) {
+      ctx.beginPath();
+      ctx.moveTo(padding.left, yPix(gy));
+      ctx.lineTo(w - padding.right, yPix(gy));
+      ctx.stroke();
+      ctx.textAlign = 'right';
+      ctx.fillText(fmt(gy), padding.left - 6, yPix(gy) + 3);
+    }
+
+    // eixos e rótulos
+    ctx.strokeStyle = '#22384d';
+    ctx.beginPath();
+    ctx.moveTo(padding.left, padding.top);
+    ctx.lineTo(padding.left, h - padding.bottom);
+    ctx.lineTo(w - padding.right, h - padding.bottom);
+    ctx.stroke();
+    ctx.fillStyle = '#9fb2c3';
+    ctx.font = '11px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('STA [mm]', padding.left + plotW / 2, h - 8);
+    ctx.save();
+    ctx.translate(14, padding.top + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Peso [kg]', 0, 0);
+    ctx.restore();
+
+    // linha do mastro
+    ctx.save();
+    ctx.strokeStyle = '#58c78a';
+    ctx.setLineDash([8, 4, 2, 4]);
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(xPix(MAST_STA_MM), padding.top);
+    ctx.lineTo(xPix(MAST_STA_MM), h - padding.bottom);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#58c78a';
+    ctx.font = '10px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('MASTRO', xPix(MAST_STA_MM) + 4, padding.top + 10);
+    ctx.restore();
+
+    // envelope certificado
+    ctx.strokeStyle = '#e0615a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    cgEnv.points.forEach(function (p, i) {
+      var px = xPix(p[0]), py = yPix(p[1]);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    ctx.stroke();
+    ctx.save();
+    ctx.globalAlpha = 0.06;
+    ctx.fillStyle = '#e0615a';
+    ctx.fill();
+    ctx.restore();
+
+    // título do envelope
+    ctx.fillStyle = '#e0615a';
+    ctx.font = '10px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(cgEnv.label + ' — E.A.S.A. Approved', padding.left + 4, padding.top - 8);
+
+    // pontos por perna
+    results.forEach(function (r, idx) {
+      if (r.cgTowMm === null || !isFinite(r.cgTowMm)) return;
+      var xTow = xPix(r.cgTowMm), yTow = yPix(r.tow);
+      var inTow = r.tow >= cgEnv.minKg && r.tow <= cgEnv.maxKg && pointInPolygon(r.cgTowMm, r.tow, cgEnv.points);
+      var color = inTow ? 'rgba(70,194,186,1)' : '#e0615a';
+
+      if (r.cgLwMm !== null && isFinite(r.cgLwMm)) {
+        var xLw = xPix(r.cgLwMm), yLw = yPix(r.lw);
+        var inLw = r.lw >= cgEnv.minKg && r.lw <= cgEnv.maxKg && pointInPolygon(r.cgLwMm, r.lw, cgEnv.points);
+        ctx.strokeStyle = (inTow && inLw) ? 'rgba(70,194,186,0.7)' : '#e0615a';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(xTow, yTow);
+        ctx.lineTo(xLw, yLw);
+        ctx.stroke();
+
+        // LW: círculo vazado
+        ctx.beginPath();
+        ctx.strokeStyle = inLw ? 'rgba(70,194,186,1)' : '#e0615a';
+        ctx.lineWidth = 2;
+        ctx.fillStyle = '#111b26';
+        ctx.arc(xLw, yLw, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // TOW: círculo cheio
+      drawPoint(ctx, xTow, yTow, color);
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.arc(xTow, yTow, 5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#e5eef8';
+      ctx.font = 'bold 10px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('P' + (idx + 1), xTow + 7, yTow - 5);
+    });
+  }
+
+  function renderChartsByMode() {
+    if (!lastCalcResult) return;
+    var mode = getChartMode();
+    var results = lastCalcResult.results;
+    var aircraft = lastCalcResult.aircraft;
+    var canvases = [document.getElementById('weightChart')];
+    if (!fullscreenOverlay.hidden) canvases.push(document.getElementById('weightChartFullscreen'));
+    if (mode === 'cg') {
+      canvases.forEach(function (cv) { drawCgChart(cv, results, aircraft); });
+    } else {
+      var criticalIndex = computeCriticalIndex(results, aircraft);
+      canvases.forEach(function (cv) { drawChart(cv, results, aircraft, lastCalcResult.watMax, criticalIndex); });
+    }
+    var title = document.getElementById('chartTitle');
+    if (title) title.textContent = mode === 'cg' ? 'Peso e balanceamento' : 'Evolução do peso';
+    renderLegend(aircraft, lastCalcResult.watMax);
+  }
+
+  function redrawCharts() {
+    renderChartsByMode();
   }
 
   function render(calcResult) {
@@ -780,11 +1075,7 @@
 
     renderAlerts(globalIssues, results);
     renderTable(results, criticalIndex);
-    renderLegend(aircraft, watMax);
-    drawChart(document.getElementById('weightChart'), results, aircraft, watMax, criticalIndex);
-    if (!fullscreenOverlay.hidden) {
-      drawChart(document.getElementById('weightChartFullscreen'), results, aircraft, watMax, criticalIndex);
-    }
+    renderChartsByMode();
   }
 
   function scheduleRecalc() {
@@ -821,6 +1112,9 @@
         updatedAt: new Date().toISOString(),
         lastModule: 'pesos'
       });
+      if (critical.cgTowMm !== null && isFinite(critical.cgTowMm)) {
+        updated.pesoCgTowMm = round1(critical.cgTowMm);
+      }
       localStorage.setItem(SHARED_KEY, JSON.stringify(updated));
     } catch (e) { /* localStorage indisponível */ }
   }
@@ -838,7 +1132,10 @@
       paxWeightKg: document.getElementById('paxWeightKg').value,
       minLandingFuelKg: document.getElementById('minLandingFuelKg').value,
       paxMode: getPaxMode(),
-      manifestUnit: getManifestUnit()
+      manifestUnit: getManifestUnit(),
+      bewArmMm: document.getElementById('bewArmMm').value,
+      paxArmMm: document.getElementById('paxArmMm').value,
+      cargoArmMm: document.getElementById('cargoArmMm').value
     };
     var legs = $$('.leg-card', legsContainer).map(function (card) {
       return {
@@ -885,6 +1182,9 @@
     if (a.minLandingFuelKg !== undefined) document.getElementById('minLandingFuelKg').value = a.minLandingFuelKg;
     if (a.paxMode !== undefined) document.getElementById('paxModeSelect').value = a.paxMode;
     if (a.manifestUnit !== undefined) document.getElementById('manifestUnitSelect').value = a.manifestUnit;
+    if (a.bewArmMm !== undefined) document.getElementById('bewArmMm').value = a.bewArmMm;
+    if (a.paxArmMm !== undefined) document.getElementById('paxArmMm').value = a.paxArmMm;
+    if (a.cargoArmMm !== undefined) document.getElementById('cargoArmMm').value = a.cargoArmMm;
 
     var legs = (data && Array.isArray(data.legs) && data.legs.length) ? data.legs : [{}];
     legs.forEach(function (legData) {
@@ -979,6 +1279,9 @@
       document.getElementById('minLandingFuelKg').value = '240';
       document.getElementById('paxModeSelect').value = 'count';
       document.getElementById('manifestUnitSelect').value = 'kg';
+      document.getElementById('bewArmMm').value = '';
+      document.getElementById('paxArmMm').value = '4601';
+      document.getElementById('cargoArmMm').value = '7700';
       addLeg(null, true);
       updateMaxLandingPlaceholder();
       applyPaxModeLabels();
@@ -992,6 +1295,16 @@
       setTableVisible(container.hidden);
     });
     loadTableVisible();
+
+    var chartModeSelect = document.getElementById('chartModeSelect');
+    try {
+      var storedMode = localStorage.getItem(CHART_MODE_KEY);
+      if (storedMode === 'cg' || storedMode === 'weight') chartModeSelect.value = storedMode;
+    } catch (e) { /* noop */ }
+    chartModeSelect.addEventListener('change', function () {
+      try { localStorage.setItem(CHART_MODE_KEY, chartModeSelect.value); } catch (e) { /* noop */ }
+      renderChartsByMode();
+    });
 
     document.getElementById('fullscreenBtn').addEventListener('click', function () {
       fullscreenOverlay.hidden = false;
@@ -1014,6 +1327,9 @@
 
     lastCalcResult = compute();
     render(lastCalcResult);
+
+    // hook de depuração/testes (não usado pela UI)
+    window.aw139PesosDebug = function () { return lastCalcResult; };
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(function () { /* noop */ });
