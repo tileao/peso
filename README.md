@@ -18,6 +18,20 @@ movimentação de pax/carga em cada parada.
   tela cheia.
 - Permite adicionar, remover e reordenar pernas, e duplicar a rota invertida
   como atalho para o "voo de volta".
+- **Modo de peso de pax** (painel Aeronave): alterna entre "quantidade × peso
+  padrão" e "peso real dos pax (kg)", para lançar o peso de pax/bagagem
+  exatamente como consta no manifesto, sem depender de uma média por
+  passageiro.
+- **Combustível real (pouso/decolagem)** (seletor "Consumo da perna", por
+  perna): em vez de informar consumo estimado, digite o combustível com que
+  vai pousar nesta perna e o combustível com que vai decolar na próxima — o
+  app deriva o consumo e o reabastecimento (ou consumo em solo/APU, se a
+  decolagem for com menos combustível do que o pouso) automaticamente.
+- **Conversor de unidade do manifesto** (kg/lb, painel Voo): manifestos às
+  vezes chegam em libras. Selecione "lb" e os campos de pax/carga/combustível
+  de cada perna convertem sozinhos para kg assim que você sai do campo — sem
+  conta de cabeça. Os parâmetros da aeronave (BEW, tripulação, combustível
+  mínimo etc.) continuam sempre em kg.
 - Compartilha a tabela + gráfico via impressão (botão "Compartilhar PDF").
 - Persiste o formulário em `localStorage` (`aw139_pesos_form_v1`) e funciona
   100% offline como PWA (`manifest.webmanifest` + `sw.js`, cache-first).

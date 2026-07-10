@@ -145,9 +145,41 @@ body {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 4px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .panel-header-row .panel-title, .result-header-row .panel-title { margin-bottom: 0; }
+
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.manifest-unit-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.manifest-unit-field select {
+  background: var(--slate);
+  border: 1px solid var(--slate-border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.hint-text {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 0 0 10px;
+}
 
 .form-grid {
   display: grid;
@@ -250,6 +282,18 @@ body {
 }
 
 .stopover-dest-label { color: var(--teal); font-weight: 600; }
+
+.computed-refuel-note {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--slate);
+  border: 1px solid var(--slate-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.computed-refuel-text { color: var(--teal); font-weight: 700; }
 
 .add-leg-btn { width: 100%; margin-top: 4px; }
 
