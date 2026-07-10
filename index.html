@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>AW139 Companion — Pesos por Perna</title>
+<meta name="description" content="Cálculo da evolução do peso do AW139 ao longo das pernas de um voo multi-trecho.">
+<meta name="theme-color" content="#0b1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pesos/Perna">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.png" type="image/png">
+<link rel="apple-touch-icon" href="./icon.png">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<main class="cockpit-shell">
+  <header class="topbar" id="topbar">
+    <button class="back-btn" id="backBtn" hidden aria-label="Voltar">←</button>
+    <div class="topbar-titles">
+      <div class="topbar-name">AW139 Companion</div>
+      <div class="topbar-subtitle">Pesos por Perna</div>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <section class="sidebar">
+
+      <section class="panel" id="aircraftPanel">
+        <h2 class="panel-title">Aeronave</h2>
+        <div class="form-grid form-grid-2">
+          <label class="field">
+            <span>Peso básico (BEW) — kg</span>
+            <input type="text" inputmode="numeric" enterkeyhint="next" id="bewKg" placeholder="ex.: 4200">
+          </label>
+          <label class="field">
+            <span>Tripulação (kg)</span>
+            <input type="text" inputmode="numeric" enterkeyhint="next" id="crewKg" value="170">
+          </label>
+          <label class="field">
+            <span>Categoria de peso</span>
+            <select id="mtowCategory">
+              <option value="6800">6800 kg</option>
+              <option value="7000" selected>7000 kg</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Peso máx. de pouso (kg)</span>
+            <input type="text" inputmode="numeric" enterkeyhint="next" id="maxLandingKg" placeholder="ex.: 7000">
+          </label>
+          <label class="field">
+            <span>Peso padrão por pax (kg)</span>
+            <input type="text" inputmode="numeric" enterkeyhint="next" id="paxWeightKg" value="90">
+          </label>
+          <label class="field">
+            <span>Combustível mín. no pouso (kg)</span>
+            <input type="text" inputmode="numeric" enterkeyhint="done" id="minLandingFuelKg" value="240">
+          </label>
+        </div>
+      </section>
+
+      <section class="panel" id="flightPanel">
+        <div class="panel-header-row">
+          <h2 class="panel-title">Voo</h2>
+          <button class="ghost-btn small-btn" id="roundTripBtn" type="button">Voo de volta</button>
+        </div>
+        <div id="legsContainer"></div>
+        <button class="ghost-btn add-leg-btn" id="addLegBtn" type="button">+ Adicionar perna</button>
+      </section>
+
+      <div class="action-row">
+        <button class="run-btn" id="runBtn" type="button">Calcular pesos</button>
+        <button class="ghost-btn" id="shareBtn" type="button">Compartilhar PDF</button>
+        <button class="ghost-btn" id="resetBtn" type="button">Reset</button>
+      </div>
+
+      <section class="panel" id="resultPanel">
+        <div class="result-header-row">
+          <h2 class="panel-title">Resultado</h2>
+          <span class="status-chip" id="statusChip" data-state="idle">Aguardando</span>
+        </div>
+
+        <div class="result-grid" id="resultGrid">
+          <div class="result-box">
+            <div class="result-label">TOW máximo do voo</div>
+            <div class="result-value" id="maxTowValue">—</div>
+            <div class="result-sub" id="maxTowSub">—</div>
+          </div>
+          <div class="result-box">
+            <div class="result-label">Margem mínima p/ MTOW</div>
+            <div class="result-value" id="minMarginValue">—</div>
+            <div class="result-sub" id="minMarginSub">—</div>
+          </div>
+          <div class="result-box">
+            <div class="result-label">Combustível final</div>
+            <div class="result-value" id="finalFuelValue">—</div>
+            <div class="result-sub" id="finalFuelSub">—</div>
+          </div>
+          <div class="result-box">
+            <div class="result-label">Total de pax transportados</div>
+            <div class="result-value" id="totalPaxValue">—</div>
+            <div class="result-sub" id="totalPaxSub">—</div>
+          </div>
+        </div>
+
+        <div class="alerts-list" id="alertsList"></div>
+
+        <div class="table-scroll">
+          <table class="flight-table" id="flightTable">
+            <thead>
+              <tr>
+                <th>Perna</th>
+                <th>ZFW</th>
+                <th>Comb. dec.</th>
+                <th>TOW</th>
+                <th>Consumo</th>
+                <th>LW</th>
+                <th>Comb. pouso</th>
+                <th>Pax</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="flightTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="disclaimer">
+        Ferramenta pessoal de estudo e planejamento — consulte o manifesto de peso e balanceamento oficial.
+      </footer>
+    </section>
+
+    <section class="viewer-pane">
+      <div class="viewer-header">
+        <h2 class="panel-title">Evolução do peso</h2>
+        <button class="ghost-btn small-btn" id="fullscreenBtn" type="button">Tela cheia</button>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="weightChart"></canvas>
+      </div>
+      <div class="chart-legend" id="chartLegend"></div>
+    </section>
+  </div>
+</main>
+
+<div class="chart-fullscreen-overlay" id="fullscreenOverlay" hidden>
+  <button class="close-fullscreen-btn" id="closeFullscreenBtn" type="button" aria-label="Fechar tela cheia">✕</button>
+  <canvas id="weightChartFullscreen"></canvas>
+</div>
+
+<template id="legTemplate">
+  <div class="leg-card">
+    <div class="leg-header">
+      <span class="leg-number"></span>
+      <div class="leg-header-actions">
+        <button class="move-leg-btn move-up-btn" type="button" aria-label="Mover perna para cima">▲</button>
+        <button class="move-leg-btn move-down-btn" type="button" aria-label="Mover perna para baixo">▼</button>
+        <button class="remove-leg-btn" type="button" aria-label="Remover perna">✕</button>
+      </div>
+    </div>
+    <div class="computed-origin-note" hidden>Origem (automática): <span class="computed-origin-text">—</span></div>
+    <div class="form-grid form-grid-2 leg-first-only">
+      <label class="field">
+        <span>Origem</span>
+        <input type="text" class="origin-input" placeholder="ex.: Base MC">
+      </label>
+      <label class="field">
+        <span>Combustível na decolagem (kg)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" class="start-fuel-input" placeholder="ex.: 900">
+      </label>
+      <label class="field">
+        <span>Pax a bordo na saída</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" class="start-pax-input" value="0">
+      </label>
+      <label class="field">
+        <span>Carga a bordo na saída (kg)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" class="start-cargo-input" value="0">
+      </label>
+    </div>
+
+    <div class="form-grid form-grid-2">
+      <label class="field">
+        <span>Destino</span>
+        <input type="text" class="dest-input" placeholder="ex.: UM-1">
+      </label>
+      <label class="field consumption-mode-field">
+        <span>Consumo da perna</span>
+        <select class="consumption-mode-select">
+          <option value="manual">Informar consumo (kg)</option>
+          <option value="time">Tempo × taxa (kg/h)</option>
+        </select>
+      </label>
+    </div>
+    <div class="form-grid form-grid-2 consumption-manual-row">
+      <label class="field">
+        <span>Consumo estimado (kg)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" class="consumption-input" placeholder="ex.: 180">
+      </label>
+    </div>
+    <div class="form-grid form-grid-2 consumption-time-row" hidden>
+      <label class="field">
+        <span>Tempo de voo (min)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" class="flight-time-input" placeholder="ex.: 27">
+      </label>
+      <label class="field">
+        <span>Consumo médio (kg/h)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" class="fuel-rate-input" value="400">
+      </label>
+    </div>
+
+    <div class="stopover-block">
+      <div class="stopover-title">Na parada em <span class="stopover-dest-label">destino</span></div>
+      <div class="form-grid form-grid-2">
+        <label class="field">
+          <span>Pax desembarcam</span>
+          <input type="text" inputmode="numeric" enterkeyhint="next" class="pax-off-input" value="0">
+        </label>
+        <label class="field">
+          <span>Pax embarcam</span>
+          <input type="text" inputmode="numeric" enterkeyhint="next" class="pax-on-input" value="0">
+        </label>
+        <label class="field">
+          <span>Carga sai (kg)</span>
+          <input type="text" inputmode="numeric" enterkeyhint="next" class="cargo-off-input" value="0">
+        </label>
+        <label class="field">
+          <span>Carga entra (kg)</span>
+          <input type="text" inputmode="numeric" enterkeyhint="next" class="cargo-on-input" value="0">
+        </label>
+        <label class="field">
+          <span>Reabastecimento (± kg)</span>
+          <input type="text" inputmode="numeric" enterkeyhint="done" class="refuel-input" value="0">
+        </label>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script src="./app.js"></script>
+</body>
+</html>

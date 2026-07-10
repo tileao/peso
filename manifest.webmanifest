@@ -1,0 +1,20 @@
+{
+  "name": "AW139 Companion — Pesos por Perna",
+  "short_name": "Pesos/Perna",
+  "description": "Cálculo da evolução do peso do AW139 ao longo das pernas de um voo multi-trecho.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "./icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
