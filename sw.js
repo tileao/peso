@@ -1,6 +1,7 @@
 'use strict';
 
-var CACHE_NAME = 'aw139-pesos-v1';
+// Bump a versão a cada release para invalidar caches antigos.
+var CACHE_NAME = 'aw139-pesos-v2';
 var ASSETS = [
   './',
   './index.html',
@@ -26,18 +27,23 @@ self.addEventListener('activate', function (event) {
   );
 });
 
+// Network-first com fallback ao cache: atualizações publicadas aparecem no
+// próximo carregamento com rede; offline continua funcionando pelo cache.
 self.addEventListener('fetch', function (event) {
   if (event.request.method !== 'GET') return;
   event.respondWith(
-    caches.match(event.request).then(function (cached) {
-      if (cached) return cached;
-      return fetch(event.request).then(function (response) {
-        if (response && response.status === 200 && response.type === 'basic') {
-          var copy = response.clone();
-          caches.open(CACHE_NAME).then(function (cache) { cache.put(event.request, copy); });
-        }
-        return response;
-      }).catch(function () { return cached; });
+    fetch(event.request).then(function (response) {
+      if (response && response.status === 200 && response.type === 'basic') {
+        var copy = response.clone();
+        caches.open(CACHE_NAME).then(function (cache) { cache.put(event.request, copy); });
+      }
+      return response;
+    }).catch(function () {
+      return caches.match(event.request).then(function (cached) {
+        if (cached) return cached;
+        if (event.request.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
+      });
     })
   );
 });
