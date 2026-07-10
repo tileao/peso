@@ -19,6 +19,11 @@
 
 * { box-sizing: border-box; }
 
+/* Classes com display próprio (grid/flex) venceriam a regra nativa do
+   [hidden]; esta regra global garante que hidden sempre oculte. As exceções
+   de impressão (.table-scroll/.viewer-pane) têm especificidade maior. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -91,6 +96,17 @@ body {
   gap: 10px;
   min-width: 0;
   border-left: 1px solid var(--slate-border);
+}
+
+.viewer-pane[hidden] { display: none !important; }
+
+.topbar-chart-btn { margin-left: auto; flex: none; }
+
+@media (min-width: 901px) {
+  .workspace.chart-hidden .sidebar {
+    max-width: 860px;
+    margin: 0 auto;
+  }
 }
 
 .viewer-header {
@@ -521,4 +537,5 @@ body {
   .viewer-pane { border-left: none; }
   .workspace { flex-direction: column; }
   .table-scroll[hidden] { display: block !important; overflow-x: visible; }
+  .viewer-pane[hidden] { display: flex !important; }
 }

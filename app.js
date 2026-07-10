@@ -5,6 +5,7 @@
   var SHARED_KEY = 'aw139_companion_shared_context_v1';
   var TABLE_VISIBLE_KEY = 'aw139_pesos_table_visible_v1';
   var CHART_MODE_KEY = 'aw139_pesos_chart_mode_v1';
+  var CHART_VISIBLE_KEY = 'aw139_pesos_chart_visible_v1';
 
   // Envelopes de CG longitudinal — AW139 RFM 139G0290X002, Figuras 1-1
   // (E.A.S.A. Approved). Pontos [STA mm, peso kg]. Selecionado pela
@@ -329,6 +330,28 @@
     var stored = null;
     try { stored = localStorage.getItem(TABLE_VISIBLE_KEY); } catch (e) { stored = null; }
     setTableVisible(stored !== '0');
+  }
+
+  // ---------------------------------------------------------------------
+  // Mostrar/ocultar o gráfico (viewer) pelo botão do header
+  // ---------------------------------------------------------------------
+
+  function setChartVisible(visible) {
+    var pane = document.querySelector('.viewer-pane');
+    var workspace = document.querySelector('.workspace');
+    var btn = document.getElementById('toggleChartBtn');
+    pane.hidden = !visible;
+    workspace.classList.toggle('chart-hidden', !visible);
+    btn.textContent = visible ? 'Ocultar gráfico' : 'Mostrar gráfico';
+    btn.setAttribute('aria-expanded', visible ? 'true' : 'false');
+    try { localStorage.setItem(CHART_VISIBLE_KEY, visible ? '1' : '0'); } catch (e) { /* noop */ }
+    if (visible) requestAnimationFrame(redrawCharts);
+  }
+
+  function loadChartVisible() {
+    var stored = null;
+    try { stored = localStorage.getItem(CHART_VISIBLE_KEY); } catch (e) { stored = null; }
+    setChartVisible(stored !== '0');
   }
 
   // ---------------------------------------------------------------------
@@ -1295,6 +1318,30 @@
       setTableVisible(container.hidden);
     });
     loadTableVisible();
+
+    document.getElementById('toggleChartBtn').addEventListener('click', function () {
+      var pane = document.querySelector('.viewer-pane');
+      setChartVisible(pane.hidden);
+    });
+    loadChartVisible();
+
+    // O PDF compartilhado deve sempre incluir o gráfico: redesenha com o
+    // viewer visível antes de imprimir e restaura o estado depois.
+    var chartHiddenBeforePrint = false;
+    window.addEventListener('beforeprint', function () {
+      var pane = document.querySelector('.viewer-pane');
+      chartHiddenBeforePrint = pane.hidden;
+      if (chartHiddenBeforePrint) {
+        pane.hidden = false;
+        redrawCharts();
+      }
+    });
+    window.addEventListener('afterprint', function () {
+      if (chartHiddenBeforePrint) {
+        document.querySelector('.viewer-pane').hidden = true;
+        chartHiddenBeforePrint = false;
+      }
+    });
 
     var chartModeSelect = document.getElementById('chartModeSelect');
     try {
