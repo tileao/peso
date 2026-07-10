@@ -1374,7 +1374,10 @@
       saveForm();
       writeSharedContext(lastCalcResult);
       if (window.innerWidth < 900) {
-        document.getElementById('resultPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var stack = document.querySelector('.top-stack');
+        var stackH = stack ? stack.offsetHeight : 0;
+        var y = document.getElementById('resultPanel').getBoundingClientRect().top + window.scrollY - stackH - 8;
+        window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
       }
     });
 
