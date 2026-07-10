@@ -43,6 +43,9 @@
     [1000, 6228]
   ];
 
+  // Consumo típico em solo/APU entre pernas, usado nas sugestões automáticas.
+  var AUTOFILL_STOP_BURN_KG = 50;
+
   var legsContainer = document.getElementById('legsContainer');
   var legTemplate = document.getElementById('legTemplate');
   var fullscreenOverlay = document.getElementById('fullscreenOverlay');
@@ -219,6 +222,68 @@
     var v = parseNum(el.value);
     if (!isFinite(v)) return;
     el.value = String(round1(v * KG_PER_LB)).replace('.', ',');
+  }
+
+  // ---------------------------------------------------------------------
+  // Autocompletamento (sugestões): quem embarca desembarca na parada, e a
+  // decolagem seguinte sai com o combustível do pouso − consumo em solo.
+  // Digitar por cima torna o campo manual; esvaziar o campo (blur) volta a
+  // aceitar sugestões.
+  // ---------------------------------------------------------------------
+
+  var AUTOFILL_SELECTOR = '.pax-off-input, .refuel-input, .landing-fuel-actual-input, .next-start-fuel-actual-input';
+
+  function autofillField(input, value) {
+    if (!input || input.dataset.manual === '1') return false;
+    if (document.activeElement === input) return false;
+    if (!isFinite(value)) return false;
+    var str = String(round1(value)).replace('.', ',');
+    if (input.value === str) return false;
+    input.value = str;
+    return true;
+  }
+
+  function applyAutofill(results) {
+    var cards = $$('.leg-card', legsContainer);
+    var changed = false;
+    cards.forEach(function (card, i) {
+      var isLast = i === cards.length - 1;
+      var r = results[i];
+      if (!r) return;
+      var mode = $('.consumption-mode-select', card).value;
+      if (mode === 'actual') {
+        var est = parseNum($('.consumption-input', card).value);
+        if (!isFinite(est)) {
+          var t = parseNum($('.flight-time-input', card).value);
+          var rate = parseNum($('.fuel-rate-input', card).value);
+          if (isFinite(t) && isFinite(rate)) est = (t / 60) * rate;
+        }
+        if (isFinite(est)) {
+          changed = autofillField($('.landing-fuel-actual-input', card), r.fuelAtStart - est) || changed;
+        }
+        if (!isLast) {
+          var lf = parseNum($('.landing-fuel-actual-input', card).value);
+          if (isFinite(lf)) {
+            changed = autofillField($('.next-start-fuel-actual-input', card), lf - AUTOFILL_STOP_BURN_KG) || changed;
+          }
+        }
+      } else if (!isLast) {
+        changed = autofillField($('.refuel-input', card), -AUTOFILL_STOP_BURN_KG) || changed;
+      }
+      if (!isLast) {
+        changed = autofillField($('.pax-off-input', card), r.paxOnBoard) || changed;
+      }
+    });
+    return changed;
+  }
+
+  function computeWithAutofill() {
+    var res = compute();
+    for (var k = 0; k < 6; k++) {
+      if (!applyAutofill(res.results)) break;
+      res = compute();
+    }
+    return res;
   }
 
   function applyLegData(card, data) {
@@ -1104,7 +1169,7 @@
   function scheduleRecalc() {
     clearTimeout(recalcTimer);
     recalcTimer = setTimeout(function () {
-      lastCalcResult = compute();
+      lastCalcResult = computeWithAutofill();
       render(lastCalcResult);
       saveForm();
     }, 60);
@@ -1177,7 +1242,13 @@
         paxOn: $('.pax-on-input', card).value,
         cargoOffKg: $('.cargo-off-input', card).value,
         cargoOnKg: $('.cargo-on-input', card).value,
-        refuelKg: $('.refuel-input', card).value
+        refuelKg: $('.refuel-input', card).value,
+        manual: {
+          paxOff: $('.pax-off-input', card).dataset.manual === '1',
+          refuel: $('.refuel-input', card).dataset.manual === '1',
+          landingFuelActual: $('.landing-fuel-actual-input', card).dataset.manual === '1',
+          nextStartFuelActual: $('.next-start-fuel-actual-input', card).dataset.manual === '1'
+        }
       };
     });
     return { aircraft: aircraft, legs: legs };
@@ -1229,6 +1300,11 @@
       $('.cargo-off-input', card).value = legData.cargoOffKg !== undefined ? legData.cargoOffKg : '0';
       $('.cargo-on-input', card).value = legData.cargoOnKg !== undefined ? legData.cargoOnKg : '0';
       $('.refuel-input', card).value = legData.refuelKg !== undefined ? legData.refuelKg : '0';
+      var manual = legData.manual || {};
+      if (manual.paxOff) $('.pax-off-input', card).dataset.manual = '1';
+      if (manual.refuel) $('.refuel-input', card).dataset.manual = '1';
+      if (manual.landingFuelActual) $('.landing-fuel-actual-input', card).dataset.manual = '1';
+      if (manual.nextStartFuelActual) $('.next-start-fuel-actual-input', card).dataset.manual = '1';
       toggleConsumptionMode(card);
     });
     renumberLegs();
@@ -1266,8 +1342,20 @@
     applyPaxModeLabels();
 
     document.addEventListener('change', function (e) { if (isFormField(e.target)) maybeConvertManifestField(e.target); });
-    document.addEventListener('input', function (e) { if (isFormField(e.target)) handleFormEvent(e); });
-    document.addEventListener('change', function (e) { if (isFormField(e.target)) handleFormEvent(e); });
+    document.addEventListener('input', function (e) {
+      if (!isFormField(e.target)) return;
+      if (e.isTrusted && e.target.matches && e.target.matches(AUTOFILL_SELECTOR)) {
+        e.target.dataset.manual = '1';
+      }
+      handleFormEvent(e);
+    });
+    document.addEventListener('change', function (e) {
+      if (!isFormField(e.target)) return;
+      if (e.target.matches && e.target.matches(AUTOFILL_SELECTOR) && e.target.value.trim() === '') {
+        delete e.target.dataset.manual;
+      }
+      handleFormEvent(e);
+    });
 
     legsContainer.addEventListener('click', function (e) {
       var card = e.target.closest('.leg-card');
@@ -1281,7 +1369,7 @@
     document.getElementById('roundTripBtn').addEventListener('click', addRoundTrip);
 
     document.getElementById('runBtn').addEventListener('click', function () {
-      lastCalcResult = compute();
+      lastCalcResult = computeWithAutofill();
       render(lastCalcResult);
       saveForm();
       writeSharedContext(lastCalcResult);
@@ -1372,7 +1460,7 @@
       resizeTimer = setTimeout(redrawCharts, 120);
     });
 
-    lastCalcResult = compute();
+    lastCalcResult = computeWithAutofill();
     render(lastCalcResult);
 
     // hook de depuração/testes (não usado pela UI)
