@@ -27,6 +27,13 @@ movimentação de pax/carga em cada parada.
   vai pousar nesta perna e o combustível com que vai decolar na próxima — o
   app deriva o consumo e o reabastecimento (ou consumo em solo/APU, se a
   decolagem for com menos combustível do que o pouso) automaticamente.
+- **Sugestões automáticas nas paradas**: por padrão todos os pax a bordo
+  desembarcam na parada, e a decolagem seguinte sai com o combustível do
+  pouso −50 kg (consumo em solo/APU) — no modo "combustível real", os campos
+  de pouso/decolagem já vêm pré-calculados a partir do consumo estimado.
+  Digitar por cima torna o valor manual (a sugestão não volta a mexer);
+  esvaziar o campo reativa a sugestão. Os flags manuais persistem com o
+  formulário.
 - **Conversor de unidade do manifesto** (kg/lb, painel Voo): manifestos às
   vezes chegam em libras. Selecione "lb" e os campos de pax/carga/combustível
   de cada perna convertem sozinhos para kg assim que você sai do campo — sem
