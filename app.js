@@ -3,6 +3,7 @@
 (function () {
   var FORM_KEY = 'aw139_pesos_form_v1';
   var SHARED_KEY = 'aw139_companion_shared_context_v1';
+  var TABLE_VISIBLE_KEY = 'aw139_pesos_table_visible_v1';
 
   var legsContainer = document.getElementById('legsContainer');
   var legTemplate = document.getElementById('legTemplate');
@@ -242,6 +243,25 @@
   function updateMaxLandingPlaceholder() {
     var cat = document.getElementById('mtowCategory').value;
     document.getElementById('maxLandingKg').placeholder = 'default: ' + cat + ' kg';
+  }
+
+  // ---------------------------------------------------------------------
+  // Mostrar/ocultar a tabela do voo
+  // ---------------------------------------------------------------------
+
+  function setTableVisible(visible) {
+    var container = document.getElementById('tableContainer');
+    var btn = document.getElementById('toggleTableBtn');
+    container.hidden = !visible;
+    btn.textContent = visible ? 'Ocultar tabela' : 'Mostrar tabela';
+    btn.setAttribute('aria-expanded', visible ? 'true' : 'false');
+    try { localStorage.setItem(TABLE_VISIBLE_KEY, visible ? '1' : '0'); } catch (e) { /* noop */ }
+  }
+
+  function loadTableVisible() {
+    var stored = null;
+    try { stored = localStorage.getItem(TABLE_VISIBLE_KEY); } catch (e) { stored = null; }
+    setTableVisible(stored !== '0');
   }
 
   // ---------------------------------------------------------------------
@@ -966,6 +986,12 @@
     });
 
     document.getElementById('shareBtn').addEventListener('click', function () { window.print(); });
+
+    document.getElementById('toggleTableBtn').addEventListener('click', function () {
+      var container = document.getElementById('tableContainer');
+      setTableVisible(container.hidden);
+    });
+    loadTableVisible();
 
     document.getElementById('fullscreenBtn').addEventListener('click', function () {
       fullscreenOverlay.hidden = false;
