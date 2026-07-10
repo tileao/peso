@@ -31,7 +31,10 @@ html, body {
   color: var(--text);
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-text-size-adjust: 100%;
+  /* clip corta o overflow sem criar scroll container (hidden quebraria o
+     position:sticky do .top-stack); hidden fica como fallback antigo */
   overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
@@ -44,6 +47,14 @@ body {
   min-height: 100vh;
 }
 
+.top-stack {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--slate-border);
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -52,9 +63,19 @@ body {
   padding-top: calc(10px + env(safe-area-inset-top));
   background: var(--panel-bg);
   border-bottom: 1px solid var(--slate-border);
-  position: sticky;
-  top: 0;
-  z-index: 20;
+}
+
+.floating-table {
+  padding: 8px 16px 10px;
+}
+
+.floating-table .table-header-row {
+  margin-bottom: 6px;
+}
+
+.floating-table .table-scroll {
+  max-height: 38vh;
+  overflow: auto;
 }
 
 .back-btn {
@@ -526,8 +547,11 @@ body {
 @media (max-width: 900px) {
   .workspace { flex-direction: column; }
   .sidebar { max-width: none; }
-  .viewer-pane { border-left: none; border-top: 1px solid var(--slate-border); }
+  /* o gráfico parte de cima: viewer antes do formulário no mobile */
+  .viewer-pane { order: -1; border-left: none; border-bottom: 1px solid var(--slate-border); }
   .chart-wrap { min-height: 260px; }
+  .floating-table { padding: 6px 12px 8px; }
+  .floating-table .table-scroll { max-height: 32vh; }
 }
 
 @media print {
@@ -536,6 +560,8 @@ body {
   .panel, .leg-card, .result-box, .chart-wrap { border-color: #999; background: #fff; }
   .viewer-pane { border-left: none; }
   .workspace { flex-direction: column; }
+  .top-stack { position: static; background: #fff; border-bottom: none; }
+  .floating-table .table-scroll { max-height: none; overflow: visible; }
   .table-scroll[hidden] { display: block !important; overflow-x: visible; }
   .viewer-pane[hidden] { display: flex !important; }
 }

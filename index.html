@@ -16,14 +16,41 @@
 </head>
 <body>
 <main class="cockpit-shell">
-  <header class="topbar" id="topbar">
-    <button class="back-btn" id="backBtn" hidden aria-label="Voltar">←</button>
-    <div class="topbar-titles">
-      <div class="topbar-name">AW139 Companion</div>
-      <div class="topbar-subtitle">Pesos por Perna</div>
+  <div class="top-stack">
+    <header class="topbar" id="topbar">
+      <button class="back-btn" id="backBtn" hidden aria-label="Voltar">←</button>
+      <div class="topbar-titles">
+        <div class="topbar-name">AW139 Companion</div>
+        <div class="topbar-subtitle">Pesos por Perna</div>
+      </div>
+      <button class="ghost-btn small-btn topbar-chart-btn" id="toggleChartBtn" type="button" aria-expanded="true">Ocultar gráfico</button>
+    </header>
+
+    <div class="floating-table">
+      <div class="table-header-row">
+        <h3 class="table-title">Tabela do voo</h3>
+        <button class="ghost-btn small-btn" id="toggleTableBtn" type="button" aria-expanded="true">Ocultar tabela</button>
+      </div>
+      <div class="table-scroll" id="tableContainer">
+        <table class="flight-table" id="flightTable">
+          <thead>
+            <tr>
+              <th>Perna</th>
+              <th>ZFW</th>
+              <th>Comb. dec.</th>
+              <th>TOW</th>
+              <th>Consumo</th>
+              <th>LW</th>
+              <th>Comb. pouso</th>
+              <th id="paxColumnHeader">Pax</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="flightTableBody"></tbody>
+        </table>
+      </div>
     </div>
-    <button class="ghost-btn small-btn topbar-chart-btn" id="toggleChartBtn" type="button" aria-expanded="true">Ocultar gráfico</button>
-  </header>
+  </div>
 
   <div class="workspace">
     <section class="sidebar">
@@ -136,29 +163,6 @@
         </div>
 
         <div class="alerts-list" id="alertsList"></div>
-
-        <div class="table-header-row">
-          <h3 class="table-title">Tabela do voo</h3>
-          <button class="ghost-btn small-btn" id="toggleTableBtn" type="button" aria-expanded="true">Ocultar tabela</button>
-        </div>
-        <div class="table-scroll" id="tableContainer">
-          <table class="flight-table" id="flightTable">
-            <thead>
-              <tr>
-                <th>Perna</th>
-                <th>ZFW</th>
-                <th>Comb. dec.</th>
-                <th>TOW</th>
-                <th>Consumo</th>
-                <th>LW</th>
-                <th>Comb. pouso</th>
-                <th id="paxColumnHeader">Pax</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="flightTableBody"></tbody>
-          </table>
-        </div>
       </section>
 
       <footer class="disclaimer">

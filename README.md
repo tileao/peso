@@ -50,11 +50,14 @@ movimentação de pax/carga em cada parada.
   de carregamento do RFM (6206–6228 mm). O cálculo reproduz exatamente o
   exemplo (a) da Seção 6 do RFM (TOW 4730 kg @ 5390,0 mm; LW 4330 kg @
   5314,1 mm).
+- **Tabela do voo flutuante**: fixa logo abaixo do header (sticky), sempre
+  visível enquanto você edita as pernas, com scroll interno e botão
+  "Ocultar/Mostrar tabela" (preferência persistida). No mobile, o gráfico
+  aparece logo abaixo dela (parte de cima), antes do formulário.
 - Botão "Ocultar/Mostrar gráfico" no header: recolhe o viewer inteiro para o
-  formulário e a tabela ocuparem a tela toda (preferência persistida; no
-  desktop a coluna central alarga). A tabela do voo também tem seu próprio
-  botão mostrar/ocultar. O PDF compartilhado sempre inclui tabela e gráfico,
-  mesmo que estejam ocultos na tela.
+  formulário ocupar a tela toda (preferência persistida; no desktop a coluna
+  central alarga). O PDF compartilhado sempre inclui tabela e gráfico, mesmo
+  que estejam ocultos na tela.
 - Compartilha a tabela + gráfico via impressão (botão "Compartilhar PDF").
 - Persiste o formulário em `localStorage` (`aw139_pesos_form_v1`) e funciona
   100% offline como PWA (`manifest.webmanifest` + `sw.js`, cache-first).
