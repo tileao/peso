@@ -327,16 +327,87 @@ body {
 .stopover-block {
   border-top: 1px dashed var(--slate-border);
   margin-top: 10px;
-  padding-top: 10px;
+  padding-top: 8px;
+}
+
+.stopover-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
 }
 
 .stopover-title {
   font-size: 12px;
   color: var(--text-dim);
-  margin-bottom: 8px;
+  flex: none;
 }
 
+.stopover-summary {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.stopover-chevron {
+  color: var(--text-dim);
+  font-size: 11px;
+  flex: none;
+  transition: transform 0.15s ease;
+}
+
+.stopover-toggle[aria-expanded="true"] .stopover-chevron { transform: rotate(90deg); }
+
+.stopover-fields { margin-top: 8px; }
+
 .stopover-dest-label { color: var(--teal); font-weight: 600; }
+
+/* Painel Aeronave recolhível */
+#aircraftDetails summary { list-style: none; }
+#aircraftDetails summary::-webkit-details-marker { display: none; }
+
+.config-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.config-summary-row .panel-title { margin-bottom: 0; flex: none; }
+
+.config-summary {
+  font-size: 12px;
+  color: var(--text-dim);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.config-chevron {
+  color: var(--text-dim);
+  font-size: 11px;
+  flex: none;
+  transition: transform 0.15s ease;
+}
+
+#aircraftDetails[open] .config-chevron { transform: rotate(90deg); }
+#aircraftDetails[open] .config-summary { visibility: hidden; }
+#aircraftDetails > .form-grid { margin-top: 12px; }
 
 .computed-refuel-note {
   grid-column: 1 / -1;

@@ -6,6 +6,7 @@
   var TABLE_VISIBLE_KEY = 'aw139_pesos_table_visible_v1';
   var CHART_MODE_KEY = 'aw139_pesos_chart_mode_v1';
   var CHART_VISIBLE_KEY = 'aw139_pesos_chart_visible_v1';
+  var AIRCRAFT_OPEN_KEY = 'aw139_pesos_aircraft_open_v1';
 
   // Envelopes de CG longitudinal — AW139 RFM 139G0290X002, Figuras 1-1
   // (E.A.S.A. Approved). Pontos [STA mm, peso kg]. Selecionado pela
@@ -349,6 +350,48 @@
       var dest = $('.dest-input', card).value.trim() || '—';
       $('.stopover-dest-label', card).textContent = dest;
     });
+  }
+
+  function updateStopoverSummaries() {
+    var isWeight = getPaxMode() === 'weight';
+    var paxUnit = isWeight ? ' kg' : '';
+    $$('.leg-card', legsContainer).forEach(function (card, i, arr) {
+      if (i === arr.length - 1) return;
+      var parts = [];
+      var paxOff = parseNum($('.pax-off-input', card).value);
+      var paxOn = parseNum($('.pax-on-input', card).value);
+      if (numOr0(paxOff) !== 0 || numOr0(paxOn) !== 0) {
+        parts.push('↓' + fmt(numOr0(paxOff)) + (numOr0(paxOn) !== 0 ? ' ↑' + fmt(numOr0(paxOn)) : '') + paxUnit + ' pax');
+      }
+      var cOff = numOr0(parseNum($('.cargo-off-input', card).value));
+      var cOn = numOr0(parseNum($('.cargo-on-input', card).value));
+      if (cOff !== 0 || cOn !== 0) {
+        parts.push('carga ↓' + fmt(cOff) + ' ↑' + fmt(cOn));
+      }
+      var mode = $('.consumption-mode-select', card).value;
+      if (mode === 'actual') {
+        var nf = parseNum($('.next-start-fuel-actual-input', card).value);
+        if (isFinite(nf)) parts.push('dec. ' + fmt(nf) + ' kg');
+      } else {
+        var rf = numOr0(parseNum($('.refuel-input', card).value));
+        if (rf !== 0) parts.push('comb. ' + (rf > 0 ? '+' : '') + fmt(rf) + ' kg');
+      }
+      $('.stopover-summary', card).textContent = parts.length ? parts.join(' · ') : 'sem alterações';
+    });
+  }
+
+  function updateAircraftSummary() {
+    var el = document.getElementById('aircraftSummary');
+    if (!el) return;
+    var bew = parseNum(document.getElementById('bewKg').value);
+    var cat = document.getElementById('mtowCategory').value;
+    var parts = [];
+    parts.push(isFinite(bew) ? 'BEW ' + fmt(bew) : 'BEW —');
+    parts.push('MTOW ' + fmt(parseNum(cat)));
+    var cg = parseNum(document.getElementById('bewArmMm').value);
+    if (isFinite(cg)) parts.push('CG ' + fmt(cg));
+    if (getPaxMode() === 'weight') parts.push('pax kg reais');
+    el.textContent = parts.join(' · ');
   }
 
   function updateComputedOriginLabels(results) {
@@ -1125,6 +1168,8 @@
     updateComputedOriginLabels(results);
     updateStopoverLabels();
     updateComputedRefuelNotes(results);
+    updateStopoverSummaries();
+    updateAircraftSummary();
 
     var criticalIndex = computeCriticalIndex(results, aircraft);
 
@@ -1364,6 +1409,24 @@
       if (e.target.classList.contains('remove-leg-btn')) removeLeg(card);
       else if (e.target.classList.contains('move-up-btn')) moveLeg(card, -1);
       else if (e.target.classList.contains('move-down-btn')) moveLeg(card, 1);
+      else {
+        var toggle = e.target.closest('.stopover-toggle');
+        if (toggle) {
+          var fields = $('.stopover-fields', card);
+          fields.hidden = !fields.hidden;
+          toggle.setAttribute('aria-expanded', fields.hidden ? 'false' : 'true');
+        }
+      }
+    });
+
+    var aircraftDetails = document.getElementById('aircraftDetails');
+    var storedOpen = null;
+    try { storedOpen = localStorage.getItem(AIRCRAFT_OPEN_KEY); } catch (e) { storedOpen = null; }
+    if (storedOpen === '1') aircraftDetails.open = true;
+    else if (storedOpen === '0') aircraftDetails.open = false;
+    else aircraftDetails.open = document.getElementById('bewKg').value.trim() === '';
+    aircraftDetails.addEventListener('toggle', function () {
+      try { localStorage.setItem(AIRCRAFT_OPEN_KEY, aircraftDetails.open ? '1' : '0'); } catch (e) { /* noop */ }
     });
 
     document.getElementById('addLegBtn').addEventListener('click', function () { addLeg(); });
@@ -1400,6 +1463,7 @@
       addLeg(null, true);
       updateMaxLandingPlaceholder();
       applyPaxModeLabels();
+      document.getElementById('aircraftDetails').open = true;
       scheduleRecalc();
     });
 
