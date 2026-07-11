@@ -28,6 +28,9 @@ movimentação de pax/carga em cada parada.
   vai pousar nesta perna e o combustível com que vai decolar na próxima — o
   app deriva o consumo e o reabastecimento (ou consumo em solo/APU, se a
   decolagem for com menos combustível do que o pouso) automaticamente.
+- **Interface enxuta**: o painel Aeronave recolhe num resumo de uma linha
+  (abre sozinho enquanto o BEW não foi informado), e a parada de cada perna
+  vira uma linha-resumo ("↓4 pax · comb. −50 kg") que expande só para editar.
 - **Sugestões automáticas nas paradas**: por padrão todos os pax a bordo
   desembarcam na parada, e a decolagem seguinte sai com o combustível do
   pouso −50 kg (consumo em solo/APU) — no modo "combustível real", os campos

@@ -56,7 +56,12 @@
     <section class="sidebar">
 
       <section class="panel" id="aircraftPanel">
-        <h2 class="panel-title">Aeronave</h2>
+        <details id="aircraftDetails">
+          <summary class="config-summary-row">
+            <span class="panel-title">Aeronave</span>
+            <span class="config-summary" id="aircraftSummary">—</span>
+            <span class="config-chevron" aria-hidden="true">▸</span>
+          </summary>
         <div class="form-grid form-grid-2">
           <label class="field">
             <span>Peso básico (BEW) — kg</span>
@@ -105,7 +110,7 @@
             <input type="text" inputmode="numeric" enterkeyhint="done" id="cargoArmMm" value="7700">
           </label>
         </div>
-        <p class="hint-text">Para o gráfico de peso e balanceamento, informe o CG do peso vazio (Chart C/E da aeronave). Braços de referência do RFM: fileiras de pax 3415 / 4789 / 5600 mm (média 4601), bagageiro 7700 mm, tripulação 2820 mm.</p>
+        </details>
       </section>
 
       <section class="panel" id="flightPanel">
@@ -122,7 +127,6 @@
             <button class="ghost-btn small-btn" id="roundTripBtn" type="button">Voo de volta</button>
           </div>
         </div>
-        <p class="hint-text">Campos de pax/carga/combustível das pernas convertem automaticamente para kg ao sair do campo, conforme a unidade acima. Sugestões automáticas nas paradas: todos os pax a bordo desembarcam e a decolagem seguinte sai com o combustível do pouso −50 kg — digite por cima para usar os valores reais; esvazie o campo para voltar à sugestão.</p>
         <div id="legsContainer"></div>
         <button class="ghost-btn add-leg-btn" id="addLegBtn" type="button">+ Adicionar perna</button>
       </section>
@@ -266,29 +270,35 @@
     </div>
 
     <div class="stopover-block">
-      <div class="stopover-title">Na parada em <span class="stopover-dest-label">destino</span></div>
-      <div class="form-grid form-grid-2">
-        <label class="field">
-          <span class="pax-off-label">Pax desembarcam</span>
-          <input type="text" inputmode="numeric" enterkeyhint="next" class="pax-off-input manifest-weight-input pax-count-aware" value="0">
-        </label>
-        <label class="field">
-          <span class="pax-on-label">Pax embarcam</span>
-          <input type="text" inputmode="numeric" enterkeyhint="next" class="pax-on-input manifest-weight-input pax-count-aware" value="0">
-        </label>
-        <label class="field">
-          <span>Carga sai (kg)</span>
-          <input type="text" inputmode="numeric" enterkeyhint="next" class="cargo-off-input manifest-weight-input" value="0">
-        </label>
-        <label class="field">
-          <span>Carga entra (kg)</span>
-          <input type="text" inputmode="numeric" enterkeyhint="next" class="cargo-on-input manifest-weight-input" value="0">
-        </label>
-        <label class="field refuel-field">
-          <span>Reabastecimento (± kg)</span>
-          <input type="text" inputmode="numeric" enterkeyhint="done" class="refuel-input manifest-weight-input" value="0">
-        </label>
-        <div class="computed-refuel-note" hidden>Reabastecimento calculado: <span class="computed-refuel-text">—</span></div>
+      <button type="button" class="stopover-toggle" aria-expanded="false">
+        <span class="stopover-title">Parada em <span class="stopover-dest-label">—</span></span>
+        <span class="stopover-summary">—</span>
+        <span class="stopover-chevron" aria-hidden="true">▸</span>
+      </button>
+      <div class="stopover-fields" hidden>
+        <div class="form-grid form-grid-2">
+          <label class="field">
+            <span class="pax-off-label">Pax desembarcam</span>
+            <input type="text" inputmode="numeric" enterkeyhint="next" class="pax-off-input manifest-weight-input pax-count-aware" value="0">
+          </label>
+          <label class="field">
+            <span class="pax-on-label">Pax embarcam</span>
+            <input type="text" inputmode="numeric" enterkeyhint="next" class="pax-on-input manifest-weight-input pax-count-aware" value="0">
+          </label>
+          <label class="field">
+            <span>Carga sai (kg)</span>
+            <input type="text" inputmode="numeric" enterkeyhint="next" class="cargo-off-input manifest-weight-input" value="0">
+          </label>
+          <label class="field">
+            <span>Carga entra (kg)</span>
+            <input type="text" inputmode="numeric" enterkeyhint="next" class="cargo-on-input manifest-weight-input" value="0">
+          </label>
+          <label class="field refuel-field">
+            <span>Reabastecimento (± kg)</span>
+            <input type="text" inputmode="numeric" enterkeyhint="done" class="refuel-input manifest-weight-input" value="0">
+          </label>
+          <div class="computed-refuel-note" hidden>Reabastecimento calculado: <span class="computed-refuel-text">—</span></div>
+        </div>
       </div>
     </div>
   </div>
