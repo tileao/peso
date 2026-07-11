@@ -201,7 +201,7 @@
     });
 
     var paxColumnHeader = document.getElementById('paxColumnHeader');
-    if (paxColumnHeader) paxColumnHeader.textContent = isWeight ? 'Peso pax (kg)' : 'Pax';
+    if (paxColumnHeader) paxColumnHeader.textContent = isWeight ? 'Peso pax (kg)' : 'POB';
     var totalPaxLabel = document.getElementById('totalPaxLabel');
     if (totalPaxLabel) totalPaxLabel.textContent = isWeight ? 'Peso total de pax embarcado' : 'Total de pax transportados';
   }
@@ -675,6 +675,7 @@
         originText: originText,
         destText: leg.dest,
         zfw: zfw,
+        payloadKg: paxContribution(paxOnBoard, aircraft) + cargoOnBoard,
         tow: tow,
         consumption: consumption,
         lw: lw,
@@ -749,13 +750,13 @@
       var statusLabel = r.status === 'error' ? 'Fora' : (r.status === 'warn' ? 'Alerta' : 'OK');
       tr.innerHTML =
         '<td>' + escapeHtml(r.originText) + ' → ' + escapeHtml(r.destText) + '</td>' +
-        '<td>' + fmt(r.zfw) + '</td>' +
+        '<td>' + fmt(r.payloadKg) + '</td>' +
         '<td>' + fmt(r.fuelAtStart) + '</td>' +
         '<td>' + fmt(r.tow) + '</td>' +
-        '<td>' + fmt(r.consumption) + '</td>' +
         '<td>' + fmt(r.lw) + '</td>' +
         '<td>' + fmt(r.fuelAtLanding) + '</td>' +
         '<td>' + fmt(r.paxOnBoard) + '</td>' +
+        '<td>' + fmt(r.consumption) + '</td>' +
         '<td><span class="table-status-pill ' + r.status + '">' + statusLabel + '</span></td>';
       tbody.appendChild(tr);
     });

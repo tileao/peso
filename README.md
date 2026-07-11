@@ -12,10 +12,11 @@ movimentação de pax/carga em cada parada.
   de pax e carga) para a perna seguinte.
 - Valida cada perna contra MTOW, peso máximo de pouso e combustível mínimo no
   pouso, com status verde/âmbar/vermelho e mensagens de alerta.
-- Mostra uma tabela do voo, caixas de resultado (TOW máximo, margem mínima,
-  combustível final, total de pax) e um gráfico em canvas com a evolução do
-  peso (degraus de TOW→LW por perna e saltos nas paradas), incluindo modo
-  tela cheia.
+- Mostra uma tabela do voo (Payload, comb. decolagem, TOW, LW, comb. pouso,
+  POB, consumo e status por perna), caixas de resultado (TOW máximo, margem
+  mínima, combustível final, total de pax) e um gráfico em canvas com a
+  evolução do peso (degraus de TOW→LW por perna e saltos nas paradas),
+  incluindo modo tela cheia.
 - Permite adicionar, remover e reordenar pernas, e duplicar a rota invertida
   como atalho para o "voo de volta".
 - **Modo de peso de pax** (painel Aeronave): alterna entre "quantidade × peso
