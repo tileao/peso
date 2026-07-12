@@ -41,7 +41,7 @@
               <th>TOW</th>
               <th>LW</th>
               <th>Comb. pouso</th>
-              <th id="paxColumnHeader">POB</th>
+              <th>Pax (kg)</th>
               <th>Consumo</th>
               <th>Status</th>
             </tr>
@@ -82,20 +82,9 @@
             <span>Peso máx. de pouso (kg)</span>
             <input type="text" inputmode="numeric" enterkeyhint="next" id="maxLandingKg" placeholder="ex.: 7000">
           </label>
-          <label class="field" id="paxWeightField">
-            <span>Peso padrão por pax (kg)</span>
-            <input type="text" inputmode="numeric" enterkeyhint="next" id="paxWeightKg" value="90">
-          </label>
           <label class="field">
             <span>Combustível mín. no pouso (kg)</span>
-            <input type="text" inputmode="numeric" enterkeyhint="done" id="minLandingFuelKg" value="240">
-          </label>
-          <label class="field">
-            <span>Modo de peso de pax</span>
-            <select id="paxModeSelect">
-              <option value="count">Quantidade × peso padrão</option>
-              <option value="weight">Peso real dos pax (kg)</option>
-            </select>
+            <input type="text" inputmode="numeric" enterkeyhint="next" id="minLandingFuelKg" value="240">
           </label>
           <label class="field">
             <span>CG long. do peso vazio (STA mm)</span>
@@ -106,7 +95,7 @@
             <input type="text" inputmode="numeric" enterkeyhint="next" id="paxArmMm" value="4601">
           </label>
           <label class="field">
-            <span>Braço da carga/bagagem (STA mm)</span>
+            <span>Braço bag/carga (STA mm)</span>
             <input type="text" inputmode="numeric" enterkeyhint="done" id="cargoArmMm" value="7700">
           </label>
         </div>
@@ -116,19 +105,26 @@
       <section class="panel" id="flightPanel">
         <div class="panel-header-row">
           <h2 class="panel-title">Voo</h2>
-          <div class="panel-header-actions">
-            <label class="manifest-unit-field">
-              <span>Manifesto em</span>
-              <select id="manifestUnitSelect">
-                <option value="kg">kg</option>
-                <option value="lb">lb</option>
-              </select>
-            </label>
-            <button class="ghost-btn small-btn" id="roundTripBtn" type="button">Voo de volta</button>
-          </div>
+          <button class="ghost-btn small-btn" id="roundTripBtn" type="button">Voo de volta</button>
         </div>
+        <label class="field route-field">
+          <span>Rota (localidades em sequência)</span>
+          <input type="text" id="routeInput" class="route-input" autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="next" placeholder="ex.: SBMI FPAB P74 FPAB SBMI">
+        </label>
+        <div class="route-legs-note" id="routeLegsNote">—</div>
+      </section>
+
+      <section class="panel" id="manifestPanel">
+        <div class="panel-header-row">
+          <h2 class="panel-title">Manifesto (pax / bag / carga)</h2>
+        </div>
+        <div id="manifestRowsContainer"></div>
+        <button class="ghost-btn add-leg-btn" id="addManifestRowBtn" type="button">+ Adicionar linha</button>
+      </section>
+
+      <section class="panel" id="fuelPanel">
+        <h2 class="panel-title">Combustível por perna</h2>
         <div id="legsContainer"></div>
-        <button class="ghost-btn add-leg-btn" id="addLegBtn" type="button">+ Adicionar perna</button>
       </section>
 
       <div class="action-row">
@@ -160,7 +156,7 @@
             <div class="result-sub" id="finalFuelSub">—</div>
           </div>
           <div class="result-box">
-            <div class="result-label" id="totalPaxLabel">Total de pax transportados</div>
+            <div class="result-label">Peso de pax embarcado</div>
             <div class="result-value" id="totalPaxValue">—</div>
             <div class="result-sub" id="totalPaxSub">—</div>
           </div>
@@ -176,11 +172,11 @@
 
     <section class="viewer-pane">
       <div class="viewer-header">
-        <h2 class="panel-title" id="chartTitle">Evolução do peso</h2>
+        <h2 class="panel-title" id="chartTitle">Peso e balanceamento</h2>
         <div class="viewer-header-actions">
           <select id="chartModeSelect" class="chart-mode-select">
+            <option value="cg" selected>Peso e balanceamento (CG)</option>
             <option value="weight">Evolução do peso</option>
-            <option value="cg">Peso e balanceamento (CG)</option>
           </select>
           <button class="ghost-btn small-btn" id="fullscreenBtn" type="button">Tela cheia</button>
         </div>
@@ -202,50 +198,32 @@
   <div class="leg-card">
     <div class="leg-header">
       <span class="leg-number"></span>
-      <div class="leg-header-actions">
-        <button class="move-leg-btn move-up-btn" type="button" aria-label="Mover perna para cima">▲</button>
-        <button class="move-leg-btn move-down-btn" type="button" aria-label="Mover perna para baixo">▼</button>
-        <button class="remove-leg-btn" type="button" aria-label="Remover perna">✕</button>
-      </div>
+      <span class="leg-route-label"></span>
     </div>
-    <div class="computed-origin-note" hidden>Origem (automática): <span class="computed-origin-text">—</span></div>
-    <div class="form-grid form-grid-2 leg-first-only">
-      <label class="field">
-        <span>Origem</span>
-        <input type="text" class="origin-input" placeholder="ex.: Base MC">
-      </label>
-      <label class="field">
-        <span>Combustível na decolagem (kg)</span>
-        <input type="text" inputmode="numeric" enterkeyhint="next" class="start-fuel-input manifest-weight-input" placeholder="ex.: 900">
-      </label>
-      <label class="field">
-        <span class="start-pax-label">Pax a bordo na saída</span>
-        <input type="text" inputmode="numeric" enterkeyhint="next" class="start-pax-input manifest-weight-input pax-count-aware" value="0">
-      </label>
-      <label class="field">
-        <span>Carga a bordo na saída (kg)</span>
-        <input type="text" inputmode="numeric" enterkeyhint="next" class="start-cargo-input manifest-weight-input" value="0">
-      </label>
-    </div>
-
     <div class="form-grid form-grid-2">
       <label class="field">
-        <span>Destino</span>
-        <input type="text" class="dest-input" placeholder="ex.: UM-1">
+        <span>Comb. na decolagem (kg)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" class="takeoff-fuel-input" placeholder="ex.: 1250">
       </label>
-      <label class="field consumption-mode-field">
-        <span>Consumo da perna</span>
+      <label class="field fuel-mode-field">
+        <span>Combustível da perna</span>
         <select class="consumption-mode-select">
-          <option value="manual">Informar consumo (kg)</option>
+          <option value="actual" selected>Comb. real no pouso</option>
+          <option value="manual">Consumo estimado (kg)</option>
           <option value="time">Tempo × taxa (kg/h)</option>
-          <option value="actual">Combustível real (pouso/decolagem)</option>
         </select>
       </label>
     </div>
-    <div class="form-grid form-grid-2 consumption-manual-row">
+    <div class="form-grid form-grid-2 consumption-actual-row">
+      <label class="field">
+        <span>Comb. no pouso (kg)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" class="landing-fuel-actual-input" placeholder="ex.: 820">
+      </label>
+    </div>
+    <div class="form-grid form-grid-2 consumption-manual-row" hidden>
       <label class="field">
         <span>Consumo estimado (kg)</span>
-        <input type="text" inputmode="numeric" enterkeyhint="next" class="consumption-input manifest-weight-input" placeholder="ex.: 180">
+        <input type="text" inputmode="numeric" enterkeyhint="next" class="consumption-input" placeholder="ex.: 180">
       </label>
     </div>
     <div class="form-grid form-grid-2 consumption-time-row" hidden>
@@ -258,49 +236,40 @@
         <input type="text" inputmode="numeric" enterkeyhint="next" class="fuel-rate-input" value="400">
       </label>
     </div>
-    <div class="form-grid form-grid-2 consumption-actual-row" hidden>
-      <label class="field">
-        <span>Combustível ao pousar nesta perna (kg)</span>
-        <input type="text" inputmode="numeric" enterkeyhint="next" class="landing-fuel-actual-input manifest-weight-input" placeholder="ex.: 820">
-      </label>
-      <label class="field next-start-fuel-field">
-        <span>Combustível ao decolar p/ próxima perna (kg)</span>
-        <input type="text" inputmode="numeric" enterkeyhint="next" class="next-start-fuel-actual-input manifest-weight-input" placeholder="ex.: 770">
-      </label>
-    </div>
+    <div class="leg-derived-note"></div>
+  </div>
+</template>
 
-    <div class="stopover-block">
-      <button type="button" class="stopover-toggle" aria-expanded="false">
-        <span class="stopover-title">Parada em <span class="stopover-dest-label">—</span></span>
-        <span class="stopover-summary">—</span>
-        <span class="stopover-chevron" aria-hidden="true">▸</span>
-      </button>
-      <div class="stopover-fields" hidden>
-        <div class="form-grid form-grid-2">
-          <label class="field">
-            <span class="pax-off-label">Pax desembarcam</span>
-            <input type="text" inputmode="numeric" enterkeyhint="next" class="pax-off-input manifest-weight-input pax-count-aware" value="0">
-          </label>
-          <label class="field">
-            <span class="pax-on-label">Pax embarcam</span>
-            <input type="text" inputmode="numeric" enterkeyhint="next" class="pax-on-input manifest-weight-input pax-count-aware" value="0">
-          </label>
-          <label class="field">
-            <span>Carga sai (kg)</span>
-            <input type="text" inputmode="numeric" enterkeyhint="next" class="cargo-off-input manifest-weight-input" value="0">
-          </label>
-          <label class="field">
-            <span>Carga entra (kg)</span>
-            <input type="text" inputmode="numeric" enterkeyhint="next" class="cargo-on-input manifest-weight-input" value="0">
-          </label>
-          <label class="field refuel-field">
-            <span>Reabastecimento (± kg)</span>
-            <input type="text" inputmode="numeric" enterkeyhint="done" class="refuel-input manifest-weight-input" value="0">
-          </label>
-          <div class="computed-refuel-note" hidden>Reabastecimento calculado: <span class="computed-refuel-text">—</span></div>
-        </div>
-      </div>
-    </div>
+<template id="manifestRowTemplate">
+  <div class="manifest-row">
+    <label class="field manifest-cell">
+      <span>De</span>
+      <select class="manifest-from-select"></select>
+    </label>
+    <label class="field manifest-cell">
+      <span>Para</span>
+      <select class="manifest-to-select"></select>
+    </label>
+    <label class="field manifest-cell">
+      <span>Pax</span>
+      <input type="text" inputmode="numeric" enterkeyhint="next" class="manifest-pax-input" placeholder="0">
+    </label>
+    <label class="field manifest-cell">
+      <span>Bag</span>
+      <input type="text" inputmode="numeric" enterkeyhint="next" class="manifest-bag-input" placeholder="0">
+    </label>
+    <label class="field manifest-cell">
+      <span>Carga</span>
+      <input type="text" inputmode="numeric" enterkeyhint="next" class="manifest-cargo-input" placeholder="0">
+    </label>
+    <label class="field manifest-cell manifest-unit-cell">
+      <span>Un.</span>
+      <select class="manifest-unit-select">
+        <option value="kg" selected>kg</option>
+        <option value="lb">lb</option>
+      </select>
+    </label>
+    <button type="button" class="remove-manifest-row-btn" aria-label="Remover linha">✕</button>
   </div>
 </template>
 
