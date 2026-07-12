@@ -325,7 +325,52 @@ body {
   font-weight: 700;
   color: var(--text);
   letter-spacing: 0.04em;
+  flex: 1;
+  text-align: right;
+  margin-right: 8px;
 }
+
+.wx-btn { flex: none; }
+
+.wx-btn.wx-filled {
+  border-color: var(--teal-border);
+  color: var(--teal);
+}
+
+.wx-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 8, 16, 0.72);
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  padding-top: calc(16px + env(safe-area-inset-top));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+.wx-dialog {
+  background: var(--panel-bg);
+  border: 1px solid var(--slate-border);
+  border-radius: 14px;
+  padding: 16px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.wx-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.wx-header .panel-title { margin-bottom: 0; }
+
+.wx-actions { margin-top: 4px; }
 
 .leg-derived-note {
   font-size: 12px;
