@@ -15,11 +15,13 @@ de cada perna.
    automáticas) — ex.: `SBMI FPAB P74 FPAB SBMI` monta 4 pernas. Botão
    "Voo de volta" duplica a rota invertida.
 3. **Manifesto (pax/bag/carga)**: uma linha por item do manifesto, com
-   De → Para e os pesos de pax, bagagem e carga — **em kg ou lb por linha**
-   (a conversão é automática no cálculo). O app aloca cada linha às pernas
-   certas: um trecho SBMI→P74 permanece a bordo durante a parada em FPAB.
-   Ex.: `SBMI-FPAB 650/90/15`, `SBMI-P74 105/19/0`, `FPAB-P74 90/15/0`,
-   `FPAB-SBMI 85/5/0`.
+   De → Para e os pesos de pax, bagagem e carga — **em kg ou lb por linha**.
+   Trocar a unidade da linha **converte os valores já digitados** (os
+   manifestos de pax/bag e de carga chegam separados, às vezes em unidades
+   diferentes: digite um em lb, mude a linha para kg e complete o outro).
+   O app aloca cada linha às pernas certas: um trecho SBMI→P74 permanece a
+   bordo durante a parada em FPAB. Ex.: `SBMI-FPAB 650/90/15`,
+   `SBMI-P74 105/19/0`, `FPAB-P74 90/15/0`, `FPAB-SBMI 85/5/0`.
 4. **Combustível por perna** (default: combustível real): informe o
    combustível na decolagem da 1ª perna e o combustível no pouso de cada
    perna — a decolagem das pernas seguintes já vem sugerida no quadro da

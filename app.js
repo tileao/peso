@@ -336,7 +336,30 @@
       $('.manifest-cargo-input', row).value = data.cargo || '';
       $('.manifest-unit-select', row).value = data.unit === 'lb' ? 'lb' : 'kg';
     }
+    var unitSelect = $('.manifest-unit-select', row);
+    unitSelect.dataset.prevUnit = unitSelect.value;
     return row;
+  }
+
+  // Ao trocar a unidade da linha, os pesos já digitados CONVERTEM para a
+  // unidade selecionada (manifestos de pax/bag e de carga chegam separados,
+  // às vezes em unidades diferentes: digita um em lb, converte a linha para
+  // kg e completa o outro em kg).
+  function convertManifestRowUnits(select) {
+    var row = select.closest('.manifest-row');
+    var prev = select.dataset.prevUnit || 'kg';
+    var next = select.value;
+    if (prev !== next) {
+      var factor = next === 'lb' ? (1 / KG_PER_LB) : KG_PER_LB;
+      ['.manifest-pax-input', '.manifest-bag-input', '.manifest-cargo-input'].forEach(function (sel) {
+        var input = $(sel, row);
+        var v = parseNum(input.value);
+        if (isFinite(v) && v !== 0) {
+          input.value = String(round1(v * factor)).replace('.', ',');
+        }
+      });
+    }
+    select.dataset.prevUnit = next;
   }
 
   function setSelectValue(select, value) {
@@ -1393,6 +1416,9 @@
       if (!isFormField(e.target)) return;
       if (e.target.matches && e.target.matches(AUTOFILL_SELECTOR) && e.target.value.trim() === '') {
         delete e.target.dataset.manual;
+      }
+      if (e.target.classList.contains('manifest-unit-select')) {
+        convertManifestRowUnits(e.target);
       }
       handleFormEvent(e);
     });
