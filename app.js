@@ -1,7 +1,7 @@
 'use strict';
 
 (function () {
-  var FORM_KEY = 'aw139_pesos_form_v1';
+  var FORM_KEY = 'aw139_pesos_form_v2';
   var SHARED_KEY = 'aw139_companion_shared_context_v1';
   var TABLE_VISIBLE_KEY = 'aw139_pesos_table_visible_v1';
   var CHART_MODE_KEY = 'aw139_pesos_chart_mode_v1';
@@ -26,11 +26,11 @@
     }
   };
   var MAST_STA_MM = 5000;
+  var CREW_ARM_MM = 2820; // STA dos assentos de piloto/copiloto (RFM Seção 6, Chart E)
 
   function getCgEnvelope(aircraft) {
     return CG_ENVELOPES[String(aircraft.mtowCategory)] || CG_ENVELOPES['7000'];
   }
-  var CREW_ARM_MM = 2820; // STA dos assentos de piloto/copiloto (RFM Seção 6, Chart E)
 
   // Braço longitudinal do combustível × quantidade, derivado dos exemplos de
   // carregamento do RFM Seção 6 (6-11/6-12) e do combustível inutilizável do
@@ -44,11 +44,16 @@
     [1000, 6228]
   ];
 
-  // Consumo típico em solo/APU entre pernas, usado nas sugestões automáticas.
+  // Consumo típico em solo/APU entre pernas, usado na sugestão de combustível
+  // de decolagem da perna seguinte.
   var AUTOFILL_STOP_BURN_KG = 50;
+
+  var KG_PER_LB = 0.45359237;
 
   var legsContainer = document.getElementById('legsContainer');
   var legTemplate = document.getElementById('legTemplate');
+  var manifestRowsContainer = document.getElementById('manifestRowsContainer');
+  var manifestRowTemplate = document.getElementById('manifestRowTemplate');
   var fullscreenOverlay = document.getElementById('fullscreenOverlay');
 
   var lastCalcResult = null;
@@ -86,8 +91,6 @@
   }
 
   function round1(n) { return Math.round(n * 10) / 10; }
-
-  var KG_PER_LB = 0.45359237;
 
   function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, function (c) {
@@ -152,7 +155,55 @@
   }
 
   // ---------------------------------------------------------------------
-  // Leg card management
+  // Rota: uma linha de localidades define as pernas
+  // ---------------------------------------------------------------------
+
+  function parseRoute(str) {
+    return String(str || '').toUpperCase().split(/[^A-Z0-9]+/).filter(function (s) { return s !== ''; });
+  }
+
+  function getStops() {
+    return parseRoute(document.getElementById('routeInput').value);
+  }
+
+  function uniqueStops(stops) {
+    var seen = {}, out = [];
+    stops.forEach(function (s) {
+      if (!seen[s]) { seen[s] = true; out.push(s); }
+    });
+    return out;
+  }
+
+  function updateRouteLegsNote(stops) {
+    var note = document.getElementById('routeLegsNote');
+    if (stops.length < 2) {
+      note.textContent = 'Informe pelo menos origem e destino para montar as pernas.';
+      return;
+    }
+    var legs = [];
+    for (var i = 0; i < stops.length - 1; i++) legs.push(stops[i] + '→' + stops[i + 1]);
+    note.textContent = (stops.length - 1) + (stops.length === 2 ? ' perna: ' : ' pernas: ') + legs.join('  ·  ');
+  }
+
+  // Escolhe a viagem mais curta possível: embarque na ÚLTIMA ocorrência da
+  // origem que ainda tem o destino pela frente; desembarque na PRIMEIRA
+  // ocorrência do destino depois disso.
+  function resolveTrip(fromCode, toCode, stops) {
+    var best = null;
+    for (var i = 0; i < stops.length - 1; i++) {
+      if (stops[i] !== fromCode) continue;
+      for (var j = i + 1; j < stops.length; j++) {
+        if (stops[j] === toCode) {
+          best = { fromIdx: i, toIdx: j };
+          break;
+        }
+      }
+    }
+    return best;
+  }
+
+  // ---------------------------------------------------------------------
+  // Cards de perna (combustível)
   // ---------------------------------------------------------------------
 
   function createLegCard() {
@@ -162,333 +213,101 @@
 
   function toggleConsumptionMode(card) {
     var mode = $('.consumption-mode-select', card).value;
+    $('.consumption-actual-row', card).hidden = mode !== 'actual';
     $('.consumption-manual-row', card).hidden = mode !== 'manual';
     $('.consumption-time-row', card).hidden = mode !== 'time';
-    $('.consumption-actual-row', card).hidden = mode !== 'actual';
-    var refuelField = $('.refuel-field', card);
-    if (refuelField) refuelField.hidden = mode === 'actual';
-    var note = $('.computed-refuel-note', card);
-    if (note) note.hidden = mode !== 'actual';
   }
 
-  // ---------------------------------------------------------------------
-  // Modo de peso de pax (quantidade × padrão | peso real em kg)
-  // ---------------------------------------------------------------------
-
-  function getPaxMode() {
-    var sel = document.getElementById('paxModeSelect');
-    return sel ? sel.value : 'count';
-  }
-
-  function paxContribution(paxOnBoard, aircraft) {
-    return aircraft.paxMode === 'weight' ? paxOnBoard : paxOnBoard * aircraft.paxWeightKg;
-  }
-
-  function applyPaxModeLabels() {
-    var isWeight = getPaxMode() === 'weight';
-    var paxWeightField = document.getElementById('paxWeightField');
-    var paxWeightInput = document.getElementById('paxWeightKg');
-    if (paxWeightField) paxWeightField.style.opacity = isWeight ? '0.4' : '';
-    if (paxWeightInput) paxWeightInput.disabled = isWeight;
-
-    $$('.start-pax-label').forEach(function (el) {
-      el.textContent = isWeight ? 'Peso de pax a bordo na saída (kg)' : 'Pax a bordo na saída';
-    });
-    $$('.pax-off-label').forEach(function (el) {
-      el.textContent = isWeight ? 'Peso de pax que desembarcam (kg)' : 'Pax desembarcam';
-    });
-    $$('.pax-on-label').forEach(function (el) {
-      el.textContent = isWeight ? 'Peso de pax que embarcam (kg)' : 'Pax embarcam';
-    });
-
-    var paxColumnHeader = document.getElementById('paxColumnHeader');
-    if (paxColumnHeader) paxColumnHeader.textContent = isWeight ? 'Peso pax (kg)' : 'POB';
-    var totalPaxLabel = document.getElementById('totalPaxLabel');
-    if (totalPaxLabel) totalPaxLabel.textContent = isWeight ? 'Peso total de pax embarcado' : 'Total de pax transportados';
-  }
-
-  // ---------------------------------------------------------------------
-  // Conversor rápido de unidade do manifesto (kg/lb) para campos de perna
-  // ---------------------------------------------------------------------
-
-  function getManifestUnit() {
-    var sel = document.getElementById('manifestUnitSelect');
-    return sel ? sel.value : 'kg';
-  }
-
-  function maybeConvertManifestField(el) {
-    if (!el.classList || !el.classList.contains('manifest-weight-input')) return;
-    if (el.classList.contains('pax-count-aware') && getPaxMode() !== 'weight') return;
-    if (getManifestUnit() !== 'lb') return;
-    var v = parseNum(el.value);
-    if (!isFinite(v)) return;
-    el.value = String(round1(v * KG_PER_LB)).replace('.', ',');
-  }
-
-  // ---------------------------------------------------------------------
-  // Autocompletamento (sugestões): quem embarca desembarca na parada, e a
-  // decolagem seguinte sai com o combustível do pouso − consumo em solo.
-  // Digitar por cima torna o campo manual; esvaziar o campo (blur) volta a
-  // aceitar sugestões.
-  // ---------------------------------------------------------------------
-
-  var AUTOFILL_SELECTOR = '.pax-off-input, .refuel-input, .landing-fuel-actual-input, .next-start-fuel-actual-input';
-
-  function autofillField(input, value) {
-    if (!input || input.dataset.manual === '1') return false;
-    if (document.activeElement === input) return false;
-    if (!isFinite(value)) return false;
-    var str = String(round1(value)).replace('.', ',');
-    if (input.value === str) return false;
-    input.value = str;
-    return true;
-  }
-
-  function applyAutofill(results) {
+  function rebuildLegCards(stops) {
+    var wanted = Math.max(0, stops.length - 1);
     var cards = $$('.leg-card', legsContainer);
-    var changed = false;
+    while (cards.length > wanted) {
+      cards.pop().remove();
+    }
+    while (cards.length < wanted) {
+      var card = createLegCard();
+      legsContainer.appendChild(card);
+      toggleConsumptionMode(card);
+      cards.push(card);
+    }
     cards.forEach(function (card, i) {
-      var isLast = i === cards.length - 1;
-      var r = results[i];
-      if (!r) return;
-      var mode = $('.consumption-mode-select', card).value;
-      if (mode === 'actual') {
-        var est = parseNum($('.consumption-input', card).value);
-        if (!isFinite(est)) {
-          var t = parseNum($('.flight-time-input', card).value);
-          var rate = parseNum($('.fuel-rate-input', card).value);
-          if (isFinite(t) && isFinite(rate)) est = (t / 60) * rate;
-        }
-        if (isFinite(est)) {
-          changed = autofillField($('.landing-fuel-actual-input', card), r.fuelAtStart - est) || changed;
-        }
-        if (!isLast) {
-          var lf = parseNum($('.landing-fuel-actual-input', card).value);
-          if (isFinite(lf)) {
-            changed = autofillField($('.next-start-fuel-actual-input', card), lf - AUTOFILL_STOP_BURN_KG) || changed;
-          }
-        }
-      } else if (!isLast) {
-        changed = autofillField($('.refuel-input', card), -AUTOFILL_STOP_BURN_KG) || changed;
-      }
-      if (!isLast) {
-        changed = autofillField($('.pax-off-input', card), r.paxOnBoard) || changed;
-      }
-    });
-    return changed;
-  }
-
-  function computeWithAutofill() {
-    var res = compute();
-    for (var k = 0; k < 6; k++) {
-      if (!applyAutofill(res.results)) break;
-      res = compute();
-    }
-    return res;
-  }
-
-  function applyLegData(card, data) {
-    if (data.dest !== undefined) $('.dest-input', card).value = data.dest;
-    if (data.consumptionKg !== undefined && isFinite(data.consumptionKg)) {
-      $('.consumption-mode-select', card).value = 'manual';
-      $('.consumption-input', card).value = String(round1(data.consumptionKg)).replace('.', ',');
-    }
-  }
-
-  function addLeg(initial, silent) {
-    var card = createLegCard();
-    legsContainer.appendChild(card);
-    if (initial) applyLegData(card, initial);
-    toggleConsumptionMode(card);
-    renumberLegs();
-    if (!silent) {
-      scheduleRecalc();
-      saveForm();
-    }
-    return card;
-  }
-
-  function removeLeg(card) {
-    if (legsContainer.children.length <= 1) return;
-    card.remove();
-    renumberLegs();
-    scheduleRecalc();
-    saveForm();
-  }
-
-  function moveLeg(card, dir) {
-    if (dir === -1 && card.previousElementSibling) {
-      legsContainer.insertBefore(card, card.previousElementSibling);
-    } else if (dir === 1 && card.nextElementSibling) {
-      legsContainer.insertBefore(card.nextElementSibling, card);
-    }
-    renumberLegs();
-    scheduleRecalc();
-    saveForm();
-  }
-
-  function renumberLegs() {
-    var cards = $$('.leg-card', legsContainer);
-    cards.forEach(function (card, i) {
-      var isFirst = i === 0;
-      var isLast = i === cards.length - 1;
       $('.leg-number', card).textContent = 'Perna ' + (i + 1);
-      $('.leg-first-only', card).hidden = !isFirst;
-      $('.computed-origin-note', card).hidden = isFirst;
-      $('.stopover-block', card).hidden = isLast;
-      $('.move-up-btn', card).disabled = isFirst;
-      $('.move-down-btn', card).disabled = isLast;
-      $('.remove-leg-btn', card).disabled = cards.length <= 1;
-      var nextStartField = $('.next-start-fuel-field', card);
-      if (nextStartField) nextStartField.hidden = isLast;
+      $('.leg-route-label', card).textContent = stops[i] + ' → ' + stops[i + 1];
     });
-    updateStopoverLabels();
-  }
-
-  function updateStopoverLabels() {
-    $$('.leg-card', legsContainer).forEach(function (card) {
-      var dest = $('.dest-input', card).value.trim() || '—';
-      $('.stopover-dest-label', card).textContent = dest;
-    });
-  }
-
-  function updateStopoverSummaries() {
-    var isWeight = getPaxMode() === 'weight';
-    var paxUnit = isWeight ? ' kg' : '';
-    $$('.leg-card', legsContainer).forEach(function (card, i, arr) {
-      if (i === arr.length - 1) return;
-      var parts = [];
-      var paxOff = parseNum($('.pax-off-input', card).value);
-      var paxOn = parseNum($('.pax-on-input', card).value);
-      if (numOr0(paxOff) !== 0 || numOr0(paxOn) !== 0) {
-        parts.push('↓' + fmt(numOr0(paxOff)) + (numOr0(paxOn) !== 0 ? ' ↑' + fmt(numOr0(paxOn)) : '') + paxUnit + ' pax');
-      }
-      var cOff = numOr0(parseNum($('.cargo-off-input', card).value));
-      var cOn = numOr0(parseNum($('.cargo-on-input', card).value));
-      if (cOff !== 0 || cOn !== 0) {
-        parts.push('carga ↓' + fmt(cOff) + ' ↑' + fmt(cOn));
-      }
-      var mode = $('.consumption-mode-select', card).value;
-      if (mode === 'actual') {
-        var nf = parseNum($('.next-start-fuel-actual-input', card).value);
-        if (isFinite(nf)) parts.push('dec. ' + fmt(nf) + ' kg');
-      } else {
-        var rf = numOr0(parseNum($('.refuel-input', card).value));
-        if (rf !== 0) parts.push('comb. ' + (rf > 0 ? '+' : '') + fmt(rf) + ' kg');
-      }
-      $('.stopover-summary', card).textContent = parts.length ? parts.join(' · ') : 'sem alterações';
-    });
-  }
-
-  function updateAircraftSummary() {
-    var el = document.getElementById('aircraftSummary');
-    if (!el) return;
-    var bew = parseNum(document.getElementById('bewKg').value);
-    var cat = document.getElementById('mtowCategory').value;
-    var parts = [];
-    parts.push(isFinite(bew) ? 'BEW ' + fmt(bew) : 'BEW —');
-    parts.push('MTOW ' + fmt(parseNum(cat)));
-    var cg = parseNum(document.getElementById('bewArmMm').value);
-    if (isFinite(cg)) parts.push('CG ' + fmt(cg));
-    if (getPaxMode() === 'weight') parts.push('pax kg reais');
-    el.textContent = parts.join(' · ');
-  }
-
-  function updateComputedOriginLabels(results) {
-    $$('.leg-card', legsContainer).forEach(function (card, i) {
-      if (i === 0) return;
-      var label = $('.computed-origin-text', card);
-      label.textContent = results[i] ? results[i].originText : '—';
-    });
-  }
-
-  function updateComputedRefuelNotes(results) {
-    $$('.leg-card', legsContainer).forEach(function (card, i) {
-      var mode = $('.consumption-mode-select', card).value;
-      if (mode !== 'actual') return;
-      var r = results[i];
-      if (!r) return;
-      var rk = r.refuelKg || 0;
-      var sign = rk >= 0 ? '+' : '';
-      var text = sign + fmt(rk) + ' kg' + (rk < 0 ? ' (consumo em solo/APU)' : '');
-      var el = $('.computed-refuel-text', card);
-      if (el) el.textContent = text;
-    });
-  }
-
-  function updateMaxLandingPlaceholder() {
-    var cat = document.getElementById('mtowCategory').value;
-    document.getElementById('maxLandingKg').placeholder = 'default: ' + cat + ' kg';
+    $('#fuelPanel').hidden = wanted === 0;
   }
 
   // ---------------------------------------------------------------------
-  // Mostrar/ocultar a tabela do voo
+  // Linhas do manifesto (pax / bag / carga por trecho)
   // ---------------------------------------------------------------------
 
-  function setTableVisible(visible) {
-    var container = document.getElementById('tableContainer');
-    var btn = document.getElementById('toggleTableBtn');
-    container.hidden = !visible;
-    btn.textContent = visible ? 'Ocultar tabela' : 'Mostrar tabela';
-    btn.setAttribute('aria-expanded', visible ? 'true' : 'false');
-    try { localStorage.setItem(TABLE_VISIBLE_KEY, visible ? '1' : '0'); } catch (e) { /* noop */ }
-  }
-
-  function loadTableVisible() {
-    var stored = null;
-    try { stored = localStorage.getItem(TABLE_VISIBLE_KEY); } catch (e) { stored = null; }
-    setTableVisible(stored !== '0');
-  }
-
-  // ---------------------------------------------------------------------
-  // Mostrar/ocultar o gráfico (viewer) pelo botão do header
-  // ---------------------------------------------------------------------
-
-  function setChartVisible(visible) {
-    var pane = document.querySelector('.viewer-pane');
-    var workspace = document.querySelector('.workspace');
-    var btn = document.getElementById('toggleChartBtn');
-    pane.hidden = !visible;
-    workspace.classList.toggle('chart-hidden', !visible);
-    btn.textContent = visible ? 'Ocultar gráfico' : 'Mostrar gráfico';
-    btn.setAttribute('aria-expanded', visible ? 'true' : 'false');
-    try { localStorage.setItem(CHART_VISIBLE_KEY, visible ? '1' : '0'); } catch (e) { /* noop */ }
-    if (visible) requestAnimationFrame(redrawCharts);
-  }
-
-  function loadChartVisible() {
-    var stored = null;
-    try { stored = localStorage.getItem(CHART_VISIBLE_KEY); } catch (e) { stored = null; }
-    setChartVisible(stored !== '0');
-  }
-
-  // ---------------------------------------------------------------------
-  // "Voo de volta" — duplica a rota invertida como atalho
-  // ---------------------------------------------------------------------
-
-  function addRoundTrip() {
-    var state = compute();
-    var results = state.results;
-    if (!results.length) return;
-
-    var n = results.length;
-    var stops = [results[0].originText];
-    results.forEach(function (r) { stops.push(r.destText); });
-    var reversedStops = stops.slice().reverse();
-
-    for (var k = 0; k < n; k++) {
-      var toName = reversedStops[k + 1];
-      var forwardLegIdx = n - 1 - k;
-      var consumption = results[forwardLegIdx].consumption;
-      addLeg({ dest: toName, consumptionKg: consumption }, true);
+  function addManifestRow(data) {
+    var frag = manifestRowTemplate.content.cloneNode(true);
+    var row = frag.querySelector('.manifest-row');
+    manifestRowsContainer.appendChild(row);
+    refreshManifestSelectsIn(row, uniqueStops(getStops()));
+    if (data) {
+      if (data.from) setSelectValue($('.manifest-from-select', row), data.from);
+      if (data.to) setSelectValue($('.manifest-to-select', row), data.to);
+      $('.manifest-pax-input', row).value = data.pax || '';
+      $('.manifest-bag-input', row).value = data.bag || '';
+      $('.manifest-cargo-input', row).value = data.cargo || '';
+      $('.manifest-unit-select', row).value = data.unit === 'lb' ? 'lb' : 'kg';
     }
-    renumberLegs();
-    scheduleRecalc();
-    saveForm();
+    return row;
+  }
+
+  function setSelectValue(select, value) {
+    var has = Array.prototype.some.call(select.options, function (o) { return o.value === value; });
+    if (!has) {
+      var opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = value;
+      select.appendChild(opt);
+    }
+    select.value = value;
+  }
+
+  function refreshManifestSelectsIn(row, stopList) {
+    ['.manifest-from-select', '.manifest-to-select'].forEach(function (sel) {
+      var select = $(sel, row);
+      var current = select.value;
+      select.innerHTML = '';
+      stopList.forEach(function (s) {
+        var opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s;
+        select.appendChild(opt);
+      });
+      if (current) setSelectValue(select, current);
+      else if (sel === '.manifest-to-select' && stopList.length > 1) select.value = stopList[1];
+    });
+  }
+
+  function refreshManifestSelects() {
+    var stopList = uniqueStops(getStops());
+    $$('.manifest-row', manifestRowsContainer).forEach(function (row) {
+      refreshManifestSelectsIn(row, stopList);
+    });
+  }
+
+  function readManifestRows() {
+    return $$('.manifest-row', manifestRowsContainer).map(function (row, idx) {
+      var unit = $('.manifest-unit-select', row).value;
+      var factor = unit === 'lb' ? KG_PER_LB : 1;
+      return {
+        index: idx,
+        from: $('.manifest-from-select', row).value,
+        to: $('.manifest-to-select', row).value,
+        paxKg: numOr0(parseNum($('.manifest-pax-input', row).value)) * factor,
+        bagKg: numOr0(parseNum($('.manifest-bag-input', row).value)) * factor,
+        cargoKg: numOr0(parseNum($('.manifest-cargo-input', row).value)) * factor
+      };
+    });
   }
 
   // ---------------------------------------------------------------------
-  // Leitura do estado a partir do DOM
+  // Leitura do estado
   // ---------------------------------------------------------------------
 
   function readAircraft() {
@@ -497,46 +316,22 @@
       crewKg: numWithDefault('crewKg', 170),
       mtowCategory: parseNum(document.getElementById('mtowCategory').value),
       maxLandingKg: numWithDefault('maxLandingKg', parseNum(document.getElementById('mtowCategory').value)),
-      paxWeightKg: numWithDefault('paxWeightKg', 90),
       minLandingFuelKg: numWithDefault('minLandingFuelKg', 240),
-      paxMode: getPaxMode(),
       bewArmMm: parseNum(document.getElementById('bewArmMm').value),
       paxArmMm: numWithDefault('paxArmMm', 4601),
       cargoArmMm: numWithDefault('cargoArmMm', 7700)
     };
   }
 
-  function readLegsFromDOM() {
-    return $$('.leg-card', legsContainer).map(function (card, i) {
-      var fuelMode = $('.consumption-mode-select', card).value;
-      var consumption = NaN;
-      var landingFuelActual = NaN;
-      var nextStartFuelActual = NaN;
-      if (fuelMode === 'time') {
-        var timeMin = parseNum($('.flight-time-input', card).value);
-        var rate = parseNum($('.fuel-rate-input', card).value);
-        consumption = (isFinite(timeMin) && isFinite(rate)) ? (timeMin / 60) * rate : NaN;
-      } else if (fuelMode === 'actual') {
-        landingFuelActual = parseNum($('.landing-fuel-actual-input', card).value);
-        nextStartFuelActual = parseNum($('.next-start-fuel-actual-input', card).value);
-      } else {
-        consumption = parseNum($('.consumption-input', card).value);
-      }
+  function readLegsFuel() {
+    return $$('.leg-card', legsContainer).map(function (card) {
       return {
-        origin: i === 0 ? ($('.origin-input', card).value.trim() || 'Origem') : null,
-        dest: $('.dest-input', card).value.trim() || ('Destino ' + (i + 1)),
-        startFuelKg: i === 0 ? parseNum($('.start-fuel-input', card).value) : null,
-        startPax: i === 0 ? parseNum($('.start-pax-input', card).value) : null,
-        startCargoKg: i === 0 ? parseNum($('.start-cargo-input', card).value) : null,
-        fuelMode: fuelMode,
-        consumptionKg: consumption,
-        landingFuelActual: landingFuelActual,
-        nextStartFuelActual: nextStartFuelActual,
-        paxOff: parseNum($('.pax-off-input', card).value),
-        paxOn: parseNum($('.pax-on-input', card).value),
-        cargoOffKg: parseNum($('.cargo-off-input', card).value),
-        cargoOnKg: parseNum($('.cargo-on-input', card).value),
-        refuelKg: parseNum($('.refuel-input', card).value)
+        mode: $('.consumption-mode-select', card).value,
+        takeoffFuelKg: parseNum($('.takeoff-fuel-input', card).value),
+        landingFuelKg: parseNum($('.landing-fuel-actual-input', card).value),
+        consumptionKg: parseNum($('.consumption-input', card).value),
+        timeMin: parseNum($('.flight-time-input', card).value),
+        rateKgH: parseNum($('.fuel-rate-input', card).value)
       };
     });
   }
@@ -585,7 +380,9 @@
 
   function compute() {
     var aircraft = readAircraft();
-    var rawLegs = readLegsFromDOM();
+    var stops = getStops();
+    var manifest = readManifestRows();
+    var legsFuel = readLegsFuel();
     var shared = readSharedContext();
     var watMax = (shared && isFinite(parseFloat(shared.watMaxWeightKg))) ? parseFloat(shared.watMaxWeightKg) : null;
     var mtow = aircraft.mtowCategory;
@@ -596,37 +393,72 @@
     }
 
     var results = [];
-    if (!rawLegs.length) return { aircraft: aircraft, results: results, watMax: watMax, globalIssues: globalIssues, totalPaxBoardings: 0 };
+    var totalPaxBoardKg = 0;
+    if (stops.length < 2) {
+      globalIssues.push({ level: 'error', message: 'Informe a rota (pelo menos origem e destino).' });
+      return { aircraft: aircraft, stops: stops, results: results, watMax: watMax, globalIssues: globalIssues, totalPaxBoardKg: 0 };
+    }
 
-    var paxOnBoard = numOr0(rawLegs[0].startPax);
-    var cargoOnBoard = numOr0(rawLegs[0].startCargoKg);
-    var fuelAtStart = rawLegs[0].startFuelKg;
-    var originText = rawLegs[0].origin || 'Origem';
-    var totalPaxBoardings = paxOnBoard;
+    var nLegs = stops.length - 1;
+    var legPax = [], legBag = [], legCargo = [];
+    for (var k = 0; k < nLegs; k++) { legPax.push(0); legBag.push(0); legCargo.push(0); }
 
-    rawLegs.forEach(function (leg, i) {
+    manifest.forEach(function (row) {
+      var hasWeight = row.paxKg !== 0 || row.bagKg !== 0 || row.cargoKg !== 0;
+      if (!hasWeight) return;
+      if (!row.from || !row.to || row.from === row.to) {
+        globalIssues.push({ level: 'error', message: 'Linha ' + (row.index + 1) + ' do manifesto: informe origem e destino diferentes.' });
+        return;
+      }
+      var trip = resolveTrip(row.from, row.to, stops);
+      if (!trip) {
+        globalIssues.push({ level: 'error', message: 'Linha ' + (row.index + 1) + ' do manifesto: trecho ' + row.from + '→' + row.to + ' não existe na rota.' });
+        return;
+      }
+      for (var k2 = trip.fromIdx; k2 < trip.toIdx; k2++) {
+        legPax[k2] += row.paxKg;
+        legBag[k2] += row.bagKg;
+        legCargo[k2] += row.cargoKg;
+      }
+      totalPaxBoardKg += row.paxKg;
+    });
+
+    for (var i = 0; i < nLegs; i++) {
+      var leg = legsFuel[i] || { mode: 'actual', takeoffFuelKg: NaN, landingFuelKg: NaN, consumptionKg: NaN, timeMin: NaN, rateKgH: NaN };
       var legIssues = [];
-      var isLast = i === rawLegs.length - 1;
 
-      var zfw = numOr0(aircraft.bewKg) + aircraft.crewKg + paxContribution(paxOnBoard, aircraft) + cargoOnBoard;
-      var startFuel = isFinite(fuelAtStart) ? fuelAtStart : 0;
-      if (!isFinite(fuelAtStart)) {
+      var payload = legPax[i] + legBag[i] + legCargo[i];
+      var zfw = numOr0(aircraft.bewKg) + aircraft.crewKg + payload;
+
+      var startFuel = isFinite(leg.takeoffFuelKg) ? leg.takeoffFuelKg : 0;
+      if (!isFinite(leg.takeoffFuelKg)) {
         legIssues.push({ level: 'error', message: 'Combustível na decolagem não informado.' });
       }
       var tow = zfw + startFuel;
 
       var consumption, fuelAtLanding;
-      if (leg.fuelMode === 'actual') {
-        fuelAtLanding = leg.landingFuelActual;
+      if (leg.mode === 'actual') {
+        fuelAtLanding = leg.landingFuelKg;
         if (!isFinite(fuelAtLanding)) {
-          legIssues.push({ level: 'error', message: 'Combustível ao pousar não informado.' });
+          legIssues.push({ level: 'error', message: 'Combustível no pouso não informado.' });
           fuelAtLanding = startFuel;
         }
         consumption = startFuel - fuelAtLanding;
+        if (consumption < 0) {
+          legIssues.push({ level: 'warn', message: 'Comb. no pouso maior que na decolagem (consumo negativo).' });
+        }
+      } else if (leg.mode === 'time') {
+        consumption = (isFinite(leg.timeMin) && isFinite(leg.rateKgH)) ? (leg.timeMin / 60) * leg.rateKgH : NaN;
+        if (!isFinite(consumption)) {
+          legIssues.push({ level: 'error', message: 'Informe tempo de voo e consumo médio.' });
+          consumption = 0;
+        }
+        fuelAtLanding = startFuel - consumption;
       } else {
-        consumption = isFinite(leg.consumptionKg) ? leg.consumptionKg : 0;
-        if (!isFinite(leg.consumptionKg)) {
+        consumption = leg.consumptionKg;
+        if (!isFinite(consumption)) {
           legIssues.push({ level: 'error', message: 'Consumo da perna não informado.' });
+          consumption = 0;
         }
         fuelAtLanding = startFuel - consumption;
       }
@@ -661,8 +493,8 @@
         var cgEnv = getCgEnvelope(aircraft);
         var zfwMoment = numOr0(aircraft.bewKg) * aircraft.bewArmMm +
           aircraft.crewKg * CREW_ARM_MM +
-          paxContribution(paxOnBoard, aircraft) * aircraft.paxArmMm +
-          cargoOnBoard * aircraft.cargoArmMm;
+          legPax[i] * aircraft.paxArmMm +
+          (legBag[i] + legCargo[i]) * aircraft.cargoArmMm;
         if (tow > 0) cgTowMm = (zfwMoment + startFuel * fuelArmMm(startFuel)) / tow;
         if (lw > 0) cgLwMm = (zfwMoment + Math.max(0, fuelAtLanding) * fuelArmMm(fuelAtLanding)) / lw;
 
@@ -681,70 +513,73 @@
         checkEnvelope(cgLwMm, lw, 'no pouso');
       }
 
-      var paxUnitSuffix = aircraft.paxMode === 'weight' ? ' kg' : '';
-      var paxOff = 0, paxOn = 0, cargoOffKg = 0, cargoOnKg = 0, refuelKg = 0, nextFuelAtStart = null;
-      if (!isLast) {
-        paxOff = numOr0(leg.paxOff);
-        paxOn = numOr0(leg.paxOn);
-        cargoOffKg = numOr0(leg.cargoOffKg);
-        cargoOnKg = numOr0(leg.cargoOnKg);
-        if (paxOff > paxOnBoard + 1e-9) {
-          legIssues.push({ level: 'error', message: 'Pax a desembarcar (' + fmt(paxOff) + paxUnitSuffix + ') maior que pax a bordo (' + fmt(paxOnBoard) + paxUnitSuffix + ')' });
-        }
-        if (cargoOffKg > cargoOnBoard + 1e-9) {
-          legIssues.push({ level: 'error', message: 'Carga a sair (' + fmt(cargoOffKg) + ' kg) maior que carga a bordo (' + fmt(cargoOnBoard) + ' kg)' });
-        }
-
-        if (leg.fuelMode === 'actual') {
-          if (isFinite(leg.nextStartFuelActual)) {
-            nextFuelAtStart = leg.nextStartFuelActual;
-            refuelKg = nextFuelAtStart - fuelAtLanding;
-          } else {
-            legIssues.push({ level: 'error', message: 'Combustível ao decolar para a próxima perna não informado.' });
-            nextFuelAtStart = fuelAtLanding;
-          }
-        } else {
-          refuelKg = numOr0(leg.refuelKg);
-          nextFuelAtStart = fuelAtLanding + refuelKg;
-        }
-      }
-
       var worst = 'ok';
       if (legIssues.some(function (x) { return x.level === 'error'; })) worst = 'error';
       else if (legIssues.some(function (x) { return x.level === 'warn'; })) worst = 'warn';
 
       results.push({
         index: i,
-        originText: originText,
-        destText: leg.dest,
+        originText: stops[i],
+        destText: stops[i + 1],
+        payloadKg: payload,
+        paxOnBoard: legPax[i],
+        bagKg: legBag[i],
+        cargoKg: legCargo[i],
         zfw: zfw,
-        payloadKg: paxContribution(paxOnBoard, aircraft) + cargoOnBoard,
         tow: tow,
         consumption: consumption,
         lw: lw,
         fuelAtStart: startFuel,
         fuelAtLanding: fuelAtLanding,
-        paxOnBoard: paxOnBoard,
-        cargoOnBoard: cargoOnBoard,
         marginToMtow: marginToMtow,
         watMargin: watMargin,
-        refuelKg: refuelKg,
         cgTowMm: cgTowMm,
         cgLwMm: cgLwMm,
         issues: legIssues,
         status: worst
       });
+    }
 
-      if (!isLast) {
-        paxOnBoard = Math.max(0, paxOnBoard - paxOff + paxOn);
-        cargoOnBoard = Math.max(0, cargoOnBoard - cargoOffKg + cargoOnKg);
-        fuelAtStart = nextFuelAtStart;
-        originText = leg.dest;
-        totalPaxBoardings += paxOn;
-      }
+    return { aircraft: aircraft, stops: stops, results: results, watMax: watMax, globalIssues: globalIssues, totalPaxBoardKg: totalPaxBoardKg };
+  }
+
+  // ---------------------------------------------------------------------
+  // Autocompletamento: a decolagem da perna N+1 sai com o combustível do
+  // pouso da perna N − consumo em solo. Digitar por cima torna manual;
+  // esvaziar o campo (blur) volta a aceitar a sugestão.
+  // ---------------------------------------------------------------------
+
+  var AUTOFILL_SELECTOR = '.takeoff-fuel-input';
+
+  function autofillField(input, value) {
+    if (!input || input.dataset.manual === '1') return false;
+    if (document.activeElement === input) return false;
+    if (!isFinite(value)) return false;
+    var str = String(round1(value)).replace('.', ',');
+    if (input.value === str) return false;
+    input.value = str;
+    return true;
+  }
+
+  function applyAutofill(results) {
+    var cards = $$('.leg-card', legsContainer);
+    var changed = false;
+    cards.forEach(function (card, i) {
+      if (i === 0) return;
+      var prev = results[i - 1];
+      if (!prev || !isFinite(prev.fuelAtLanding)) return;
+      changed = autofillField($('.takeoff-fuel-input', card), prev.fuelAtLanding - AUTOFILL_STOP_BURN_KG) || changed;
     });
+    return changed;
+  }
 
-    return { aircraft: aircraft, results: results, watMax: watMax, globalIssues: globalIssues, totalPaxBoardings: totalPaxBoardings };
+  function computeWithAutofill() {
+    var res = compute();
+    for (var k = 0; k < 8; k++) {
+      if (!applyAutofill(res.results)) break;
+      res = compute();
+    }
+    return res;
   }
 
   // ---------------------------------------------------------------------
@@ -755,6 +590,33 @@
     var chip = document.getElementById('statusChip');
     chip.dataset.state = state;
     chip.textContent = text;
+  }
+
+  function updateAircraftSummary() {
+    var el = document.getElementById('aircraftSummary');
+    if (!el) return;
+    var bew = parseNum(document.getElementById('bewKg').value);
+    var cat = document.getElementById('mtowCategory').value;
+    var parts = [];
+    parts.push(isFinite(bew) ? 'BEW ' + fmt(bew) : 'BEW —');
+    parts.push('MTOW ' + fmt(parseNum(cat)));
+    var cg = parseNum(document.getElementById('bewArmMm').value);
+    if (isFinite(cg)) parts.push('CG ' + fmt(cg));
+    el.textContent = parts.join(' · ');
+  }
+
+  function updateLegDerivedNotes(results) {
+    $$('.leg-card', legsContainer).forEach(function (card, i) {
+      var note = $('.leg-derived-note', card);
+      var r = results[i];
+      if (!r) { note.textContent = ''; return; }
+      var mode = $('.consumption-mode-select', card).value;
+      if (mode === 'actual') {
+        note.textContent = 'Consumo da perna: ' + fmt(r.consumption) + ' kg';
+      } else {
+        note.textContent = 'Comb. no pouso: ' + fmt(r.fuelAtLanding) + ' kg';
+      }
+    });
   }
 
   function renderAlerts(globalIssues, results) {
@@ -770,7 +632,7 @@
     if (!items.length) {
       var div = document.createElement('div');
       div.className = 'alert-item';
-      div.textContent = results.length ? 'Nenhum alerta — todas as pernas dentro dos limites.' : 'Adicione pernas e calcule para ver o resultado.';
+      div.textContent = results.length ? 'Nenhum alerta — todas as pernas dentro dos limites.' : 'Informe a rota e o manifesto para ver o resultado.';
       list.appendChild(div);
       return;
     }
@@ -807,7 +669,7 @@
 
   function getChartMode() {
     var sel = document.getElementById('chartModeSelect');
-    return sel ? sel.value : 'weight';
+    return sel ? sel.value : 'cg';
   }
 
   function renderLegend(aircraft, watMax) {
@@ -822,7 +684,7 @@
     } else {
       items = [
         { color: 'rgba(70,194,186,1)', label: 'TOW → LW (perna)' },
-        { color: '#9fb2c3', label: 'Parada (pax/carga/reabastecimento)' },
+        { color: '#9fb2c3', label: 'Parada (manifesto/reabastecimento)' },
         { color: '#e0615a', label: 'MTOW (' + fmt(aircraft.mtowCategory) + ' kg)' },
         { color: '#e0a94b', label: 'Máx. pouso (' + fmt(aircraft.maxLandingKg) + ' kg)' }
       ];
@@ -840,7 +702,7 @@
     ctx.fill();
   }
 
-  function drawChart(canvas, results, aircraft, watMax, criticalIndex) {
+  function setupCanvas(canvas) {
     var ctx = canvas.getContext('2d');
     var dpr = window.devicePixelRatio || 1;
     var rect = canvas.parentElement.getBoundingClientRect();
@@ -852,12 +714,18 @@
     canvas.style.height = h + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+  }
+
+  function drawChart(canvas, results, aircraft, watMax, criticalIndex) {
+    var c = setupCanvas(canvas);
+    var ctx = c.ctx, w = c.w, h = c.h;
 
     if (!results.length) {
       ctx.fillStyle = '#9fb2c3';
       ctx.font = '13px Inter, system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Sem dados — calcule o voo para ver o gráfico.', w / 2, h / 2);
+      ctx.fillText('Sem dados — informe a rota para ver o gráfico.', w / 2, h / 2);
       return;
     }
 
@@ -966,21 +834,6 @@
     });
   }
 
-  function setupCanvas(canvas) {
-    var ctx = canvas.getContext('2d');
-    var dpr = window.devicePixelRatio || 1;
-    var rect = canvas.parentElement.getBoundingClientRect();
-    var w = Math.max(rect.width, 10);
-    var h = Math.max(rect.height, 10);
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-    return { ctx: ctx, w: w, h: h };
-  }
-
   function drawCgChart(canvas, results, aircraft) {
     var c = setupCanvas(canvas);
     var ctx = c.ctx, w = c.w, h = c.h;
@@ -1002,7 +855,7 @@
     var xMin = 4900, xMax = 5700;
     var yMin = 4200, yMax = cgEnv.maxKg + 200;
     results.forEach(function (r) {
-      [ [r.cgTowMm, r.tow], [r.cgLwMm, r.lw] ].forEach(function (p) {
+      [[r.cgTowMm, r.tow], [r.cgLwMm, r.lw]].forEach(function (p) {
         if (p[0] !== null && isFinite(p[0])) {
           if (p[0] < xMin + 20) xMin = p[0] - 40;
           if (p[0] > xMax - 20) xMax = p[0] + 40;
@@ -1162,14 +1015,11 @@
   function render(calcResult) {
     var aircraft = calcResult.aircraft;
     var results = calcResult.results;
-    var watMax = calcResult.watMax;
     var globalIssues = calcResult.globalIssues;
 
-    updateComputedOriginLabels(results);
-    updateStopoverLabels();
-    updateComputedRefuelNotes(results);
-    updateStopoverSummaries();
     updateAircraftSummary();
+    updateLegDerivedNotes(results);
+    updateRouteLegsNote(calcResult.stops);
 
     var criticalIndex = computeCriticalIndex(results, aircraft);
 
@@ -1196,8 +1046,8 @@
       document.getElementById('finalFuelValue').textContent = fmt(finalFuel) + ' kg';
       document.getElementById('finalFuelSub').textContent = 'Mínimo exigido: ' + fmt(aircraft.minLandingFuelKg) + ' kg';
 
-      document.getElementById('totalPaxValue').textContent = fmt(calcResult.totalPaxBoardings);
-      document.getElementById('totalPaxSub').textContent = 'Embarques ao longo do voo';
+      document.getElementById('totalPaxValue').textContent = fmt(calcResult.totalPaxBoardKg) + ' kg';
+      document.getElementById('totalPaxSub').textContent = 'Somatório dos embarques do manifesto';
     } else {
       ['maxTowValue', 'minMarginValue', 'finalFuelValue', 'totalPaxValue'].forEach(function (id) {
         document.getElementById(id).textContent = '—';
@@ -1263,41 +1113,38 @@
       crewKg: document.getElementById('crewKg').value,
       mtowCategory: document.getElementById('mtowCategory').value,
       maxLandingKg: document.getElementById('maxLandingKg').value,
-      paxWeightKg: document.getElementById('paxWeightKg').value,
       minLandingFuelKg: document.getElementById('minLandingFuelKg').value,
-      paxMode: getPaxMode(),
-      manifestUnit: getManifestUnit(),
       bewArmMm: document.getElementById('bewArmMm').value,
       paxArmMm: document.getElementById('paxArmMm').value,
       cargoArmMm: document.getElementById('cargoArmMm').value
     };
-    var legs = $$('.leg-card', legsContainer).map(function (card) {
+    var manifest = $$('.manifest-row', manifestRowsContainer).map(function (row) {
       return {
-        origin: $('.origin-input', card).value,
-        startFuelKg: $('.start-fuel-input', card).value,
-        startPax: $('.start-pax-input', card).value,
-        startCargoKg: $('.start-cargo-input', card).value,
-        dest: $('.dest-input', card).value,
-        consumptionMode: $('.consumption-mode-select', card).value,
-        consumptionKg: $('.consumption-input', card).value,
-        flightTimeMin: $('.flight-time-input', card).value,
-        fuelRateKgH: $('.fuel-rate-input', card).value,
-        landingFuelActual: $('.landing-fuel-actual-input', card).value,
-        nextStartFuelActual: $('.next-start-fuel-actual-input', card).value,
-        paxOff: $('.pax-off-input', card).value,
-        paxOn: $('.pax-on-input', card).value,
-        cargoOffKg: $('.cargo-off-input', card).value,
-        cargoOnKg: $('.cargo-on-input', card).value,
-        refuelKg: $('.refuel-input', card).value,
-        manual: {
-          paxOff: $('.pax-off-input', card).dataset.manual === '1',
-          refuel: $('.refuel-input', card).dataset.manual === '1',
-          landingFuelActual: $('.landing-fuel-actual-input', card).dataset.manual === '1',
-          nextStartFuelActual: $('.next-start-fuel-actual-input', card).dataset.manual === '1'
-        }
+        from: $('.manifest-from-select', row).value,
+        to: $('.manifest-to-select', row).value,
+        pax: $('.manifest-pax-input', row).value,
+        bag: $('.manifest-bag-input', row).value,
+        cargo: $('.manifest-cargo-input', row).value,
+        unit: $('.manifest-unit-select', row).value
       };
     });
-    return { aircraft: aircraft, legs: legs };
+    var legs = $$('.leg-card', legsContainer).map(function (card) {
+      return {
+        mode: $('.consumption-mode-select', card).value,
+        takeoffFuel: $('.takeoff-fuel-input', card).value,
+        landingFuel: $('.landing-fuel-actual-input', card).value,
+        consumption: $('.consumption-input', card).value,
+        timeMin: $('.flight-time-input', card).value,
+        rateKgH: $('.fuel-rate-input', card).value,
+        takeoffManual: $('.takeoff-fuel-input', card).dataset.manual === '1'
+      };
+    });
+    return {
+      aircraft: aircraft,
+      route: document.getElementById('routeInput').value,
+      manifest: manifest,
+      legs: legs
+    };
   }
 
   function saveForm() {
@@ -1318,42 +1165,67 @@
     if (a.crewKg !== undefined) document.getElementById('crewKg').value = a.crewKg;
     if (a.mtowCategory !== undefined) document.getElementById('mtowCategory').value = a.mtowCategory;
     if (a.maxLandingKg !== undefined) document.getElementById('maxLandingKg').value = a.maxLandingKg;
-    if (a.paxWeightKg !== undefined) document.getElementById('paxWeightKg').value = a.paxWeightKg;
     if (a.minLandingFuelKg !== undefined) document.getElementById('minLandingFuelKg').value = a.minLandingFuelKg;
-    if (a.paxMode !== undefined) document.getElementById('paxModeSelect').value = a.paxMode;
-    if (a.manifestUnit !== undefined) document.getElementById('manifestUnitSelect').value = a.manifestUnit;
     if (a.bewArmMm !== undefined) document.getElementById('bewArmMm').value = a.bewArmMm;
     if (a.paxArmMm !== undefined) document.getElementById('paxArmMm').value = a.paxArmMm;
     if (a.cargoArmMm !== undefined) document.getElementById('cargoArmMm').value = a.cargoArmMm;
 
-    var legs = (data && Array.isArray(data.legs) && data.legs.length) ? data.legs : [{}];
-    legs.forEach(function (legData) {
-      var card = createLegCard();
-      legsContainer.appendChild(card);
-      $('.origin-input', card).value = legData.origin || '';
-      $('.start-fuel-input', card).value = legData.startFuelKg || '';
-      $('.start-pax-input', card).value = legData.startPax !== undefined ? legData.startPax : '0';
-      $('.start-cargo-input', card).value = legData.startCargoKg !== undefined ? legData.startCargoKg : '0';
-      $('.dest-input', card).value = legData.dest || '';
-      $('.consumption-mode-select', card).value = legData.consumptionMode || 'manual';
-      $('.consumption-input', card).value = legData.consumptionKg || '';
-      $('.flight-time-input', card).value = legData.flightTimeMin || '';
-      $('.fuel-rate-input', card).value = legData.fuelRateKgH || '400';
-      $('.landing-fuel-actual-input', card).value = legData.landingFuelActual || '';
-      $('.next-start-fuel-actual-input', card).value = legData.nextStartFuelActual || '';
-      $('.pax-off-input', card).value = legData.paxOff !== undefined ? legData.paxOff : '0';
-      $('.pax-on-input', card).value = legData.paxOn !== undefined ? legData.paxOn : '0';
-      $('.cargo-off-input', card).value = legData.cargoOffKg !== undefined ? legData.cargoOffKg : '0';
-      $('.cargo-on-input', card).value = legData.cargoOnKg !== undefined ? legData.cargoOnKg : '0';
-      $('.refuel-input', card).value = legData.refuelKg !== undefined ? legData.refuelKg : '0';
-      var manual = legData.manual || {};
-      if (manual.paxOff) $('.pax-off-input', card).dataset.manual = '1';
-      if (manual.refuel) $('.refuel-input', card).dataset.manual = '1';
-      if (manual.landingFuelActual) $('.landing-fuel-actual-input', card).dataset.manual = '1';
-      if (manual.nextStartFuelActual) $('.next-start-fuel-actual-input', card).dataset.manual = '1';
+    document.getElementById('routeInput').value = (data && data.route) || '';
+    var stops = getStops();
+    rebuildLegCards(stops);
+
+    var legs = (data && Array.isArray(data.legs)) ? data.legs : [];
+    $$('.leg-card', legsContainer).forEach(function (card, i) {
+      var legData = legs[i] || {};
+      $('.consumption-mode-select', card).value = legData.mode || 'actual';
+      $('.takeoff-fuel-input', card).value = legData.takeoffFuel || '';
+      $('.landing-fuel-actual-input', card).value = legData.landingFuel || '';
+      $('.consumption-input', card).value = legData.consumption || '';
+      $('.flight-time-input', card).value = legData.timeMin || '';
+      $('.fuel-rate-input', card).value = legData.rateKgH || '400';
+      if (legData.takeoffManual) $('.takeoff-fuel-input', card).dataset.manual = '1';
       toggleConsumptionMode(card);
     });
-    renumberLegs();
+
+    var manifest = (data && Array.isArray(data.manifest) && data.manifest.length) ? data.manifest : [{}];
+    manifest.forEach(function (rowData) { addManifestRow(rowData); });
+  }
+
+  // ---------------------------------------------------------------------
+  // Mostrar/ocultar a tabela e o gráfico
+  // ---------------------------------------------------------------------
+
+  function setTableVisible(visible) {
+    var container = document.getElementById('tableContainer');
+    var btn = document.getElementById('toggleTableBtn');
+    container.hidden = !visible;
+    btn.textContent = visible ? 'Ocultar tabela' : 'Mostrar tabela';
+    btn.setAttribute('aria-expanded', visible ? 'true' : 'false');
+    try { localStorage.setItem(TABLE_VISIBLE_KEY, visible ? '1' : '0'); } catch (e) { /* noop */ }
+  }
+
+  function loadTableVisible() {
+    var stored = null;
+    try { stored = localStorage.getItem(TABLE_VISIBLE_KEY); } catch (e) { stored = null; }
+    setTableVisible(stored !== '0');
+  }
+
+  function setChartVisible(visible) {
+    var pane = document.querySelector('.viewer-pane');
+    var workspace = document.querySelector('.workspace');
+    var btn = document.getElementById('toggleChartBtn');
+    pane.hidden = !visible;
+    workspace.classList.toggle('chart-hidden', !visible);
+    btn.textContent = visible ? 'Ocultar gráfico' : 'Mostrar gráfico';
+    btn.setAttribute('aria-expanded', visible ? 'true' : 'false');
+    try { localStorage.setItem(CHART_VISIBLE_KEY, visible ? '1' : '0'); } catch (e) { /* noop */ }
+    if (visible) requestAnimationFrame(redrawCharts);
+  }
+
+  function loadChartVisible() {
+    var stored = null;
+    try { stored = localStorage.getItem(CHART_VISIBLE_KEY); } catch (e) { stored = null; }
+    setChartVisible(stored !== '0');
   }
 
   // ---------------------------------------------------------------------
@@ -1364,30 +1236,37 @@
     return el && el.closest && el.closest('.sidebar');
   }
 
+  function handleRouteInput(el) {
+    var pos = el.selectionStart;
+    var upper = el.value.toUpperCase();
+    if (el.value !== upper) {
+      el.value = upper;
+      try { el.setSelectionRange(pos, pos); } catch (e) { /* noop */ }
+    }
+    rebuildLegCards(getStops());
+    refreshManifestSelects();
+  }
+
   function handleFormEvent(e) {
     var t = e.target;
+    if (t.id === 'routeInput') handleRouteInput(t);
     if (t.classList.contains('consumption-mode-select')) {
       toggleConsumptionMode(t.closest('.leg-card'));
     }
-    if (t.classList.contains('dest-input')) {
-      updateStopoverLabels();
-    }
-    if (t.id === 'mtowCategory') {
-      updateMaxLandingPlaceholder();
-    }
-    if (t.id === 'paxModeSelect') {
-      applyPaxModeLabels();
-    }
+    if (t.id === 'mtowCategory') updateMaxLandingPlaceholder();
     scheduleRecalc();
+  }
+
+  function updateMaxLandingPlaceholder() {
+    var cat = document.getElementById('mtowCategory').value;
+    document.getElementById('maxLandingKg').placeholder = 'default: ' + cat + ' kg';
   }
 
   function init() {
     applyQueryParams();
     loadForm();
     updateMaxLandingPlaceholder();
-    applyPaxModeLabels();
 
-    document.addEventListener('change', function (e) { if (isFormField(e.target)) maybeConvertManifestField(e.target); });
     document.addEventListener('input', function (e) {
       if (!isFormField(e.target)) return;
       if (e.isTrusted && e.target.matches && e.target.matches(AUTOFILL_SELECTOR)) {
@@ -1403,34 +1282,30 @@
       handleFormEvent(e);
     });
 
-    legsContainer.addEventListener('click', function (e) {
-      var card = e.target.closest('.leg-card');
-      if (!card) return;
-      if (e.target.classList.contains('remove-leg-btn')) removeLeg(card);
-      else if (e.target.classList.contains('move-up-btn')) moveLeg(card, -1);
-      else if (e.target.classList.contains('move-down-btn')) moveLeg(card, 1);
-      else {
-        var toggle = e.target.closest('.stopover-toggle');
-        if (toggle) {
-          var fields = $('.stopover-fields', card);
-          fields.hidden = !fields.hidden;
-          toggle.setAttribute('aria-expanded', fields.hidden ? 'false' : 'true');
+    manifestRowsContainer.addEventListener('click', function (e) {
+      if (e.target.classList.contains('remove-manifest-row-btn')) {
+        var row = e.target.closest('.manifest-row');
+        if (row && $$('.manifest-row', manifestRowsContainer).length > 1) {
+          row.remove();
+          scheduleRecalc();
         }
       }
     });
 
-    var aircraftDetails = document.getElementById('aircraftDetails');
-    var storedOpen = null;
-    try { storedOpen = localStorage.getItem(AIRCRAFT_OPEN_KEY); } catch (e) { storedOpen = null; }
-    if (storedOpen === '1') aircraftDetails.open = true;
-    else if (storedOpen === '0') aircraftDetails.open = false;
-    else aircraftDetails.open = document.getElementById('bewKg').value.trim() === '';
-    aircraftDetails.addEventListener('toggle', function () {
-      try { localStorage.setItem(AIRCRAFT_OPEN_KEY, aircraftDetails.open ? '1' : '0'); } catch (e) { /* noop */ }
+    document.getElementById('addManifestRowBtn').addEventListener('click', function () {
+      addManifestRow(null);
+      scheduleRecalc();
     });
 
-    document.getElementById('addLegBtn').addEventListener('click', function () { addLeg(); });
-    document.getElementById('roundTripBtn').addEventListener('click', addRoundTrip);
+    document.getElementById('roundTripBtn').addEventListener('click', function () {
+      var stops = getStops();
+      if (stops.length < 2) return;
+      var back = stops.slice(0, stops.length - 1).reverse();
+      document.getElementById('routeInput').value = stops.concat(back).join(' ');
+      rebuildLegCards(getStops());
+      refreshManifestSelects();
+      scheduleRecalc();
+    });
 
     document.getElementById('runBtn').addEventListener('click', function () {
       lastCalcResult = computeWithAutofill();
@@ -1448,22 +1323,21 @@
     document.getElementById('resetBtn').addEventListener('click', function () {
       if (!window.confirm('Limpar todos os dados do formulário?')) return;
       try { localStorage.removeItem(FORM_KEY); } catch (e) { /* noop */ }
-      legsContainer.innerHTML = '';
       document.getElementById('bewKg').value = '';
       document.getElementById('crewKg').value = '170';
       document.getElementById('mtowCategory').value = '7000';
       document.getElementById('maxLandingKg').value = '';
-      document.getElementById('paxWeightKg').value = '90';
       document.getElementById('minLandingFuelKg').value = '240';
-      document.getElementById('paxModeSelect').value = 'count';
-      document.getElementById('manifestUnitSelect').value = 'kg';
       document.getElementById('bewArmMm').value = '';
       document.getElementById('paxArmMm').value = '4601';
       document.getElementById('cargoArmMm').value = '7700';
-      addLeg(null, true);
-      updateMaxLandingPlaceholder();
-      applyPaxModeLabels();
+      document.getElementById('routeInput').value = '';
+      manifestRowsContainer.innerHTML = '';
+      legsContainer.innerHTML = '';
+      rebuildLegCards([]);
+      addManifestRow(null);
       document.getElementById('aircraftDetails').open = true;
+      updateMaxLandingPlaceholder();
       scheduleRecalc();
     });
 
@@ -1507,6 +1381,16 @@
     chartModeSelect.addEventListener('change', function () {
       try { localStorage.setItem(CHART_MODE_KEY, chartModeSelect.value); } catch (e) { /* noop */ }
       renderChartsByMode();
+    });
+
+    var aircraftDetails = document.getElementById('aircraftDetails');
+    var storedOpen = null;
+    try { storedOpen = localStorage.getItem(AIRCRAFT_OPEN_KEY); } catch (e) { storedOpen = null; }
+    if (storedOpen === '1') aircraftDetails.open = true;
+    else if (storedOpen === '0') aircraftDetails.open = false;
+    else aircraftDetails.open = document.getElementById('bewKg').value.trim() === '';
+    aircraftDetails.addEventListener('toggle', function () {
+      try { localStorage.setItem(AIRCRAFT_OPEN_KEY, aircraftDetails.open ? '1' : '0'); } catch (e) { /* noop */ }
     });
 
     document.getElementById('fullscreenBtn').addEventListener('click', function () {
