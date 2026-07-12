@@ -64,6 +64,10 @@
           </summary>
         <div class="form-grid form-grid-2">
           <label class="field">
+            <span>Matrícula</span>
+            <input type="text" autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="next" id="registrationInput" class="route-input" placeholder="ex.: PR-ABC">
+          </label>
+          <label class="field">
             <span>Peso básico (BEW) — kg</span>
             <input type="text" inputmode="numeric" enterkeyhint="next" id="bewKg" placeholder="ex.: 4200">
           </label>
@@ -194,11 +198,88 @@
   <canvas id="weightChartFullscreen"></canvas>
 </div>
 
+<div class="wx-overlay" id="wxOverlay" hidden>
+  <div class="wx-dialog" role="dialog" aria-labelledby="wxTitle">
+    <div class="wx-header">
+      <h3 class="panel-title" id="wxTitle">Weather</h3>
+      <button type="button" class="remove-manifest-row-btn" id="wxCloseBtn" aria-label="Fechar">✕</button>
+    </div>
+    <div class="form-grid form-grid-2">
+      <label class="field">
+        <span>Tipo de destino</span>
+        <select id="wxType">
+          <option value="um">Unidade marítima (UM)</option>
+          <option value="aero">Aeródromo</option>
+        </select>
+      </label>
+    </div>
+    <div class="form-grid form-grid-2">
+      <label class="field">
+        <span>QNH (hPa)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" id="wxQnh" placeholder="ex.: 1013">
+      </label>
+      <label class="field wx-um-only">
+        <span>Aproamento (°)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" id="wxAproamento" placeholder="ex.: 240">
+      </label>
+      <label class="field">
+        <span>Vento (dir/int kt)</span>
+        <input type="text" enterkeyhint="next" id="wxVento" placeholder="ex.: 120/15">
+      </label>
+      <label class="field">
+        <span>Temperatura (°C)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" id="wxTemp" placeholder="ex.: 28">
+      </label>
+      <label class="field wx-um-only">
+        <span>Pitch (°)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" id="wxPitch" placeholder="ex.: 1,5">
+      </label>
+      <label class="field wx-um-only">
+        <span>Roll (°)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" id="wxRoll" placeholder="ex.: 2">
+      </label>
+      <label class="field wx-um-only">
+        <span>Heave (m)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" id="wxHeave" placeholder="ex.: 1,2">
+      </label>
+      <label class="field wx-um-only">
+        <span>Heave rate (m/s)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" id="wxHeaveRate" placeholder="ex.: 0,8">
+      </label>
+      <label class="field wx-um-only">
+        <span>Inclinação (°)</span>
+        <input type="text" inputmode="numeric" enterkeyhint="next" id="wxInclinacao" placeholder="ex.: 1">
+      </label>
+      <label class="field wx-um-only">
+        <span>Status light</span>
+        <select id="wxStatusLight">
+          <option value="">—</option>
+          <option value="verde">Verde</option>
+          <option value="vermelho">Vermelho</option>
+        </select>
+      </label>
+      <label class="field wx-um-only">
+        <span>Helideque guarnecido e liberado</span>
+        <select id="wxHelideckOk">
+          <option value="">—</option>
+          <option value="sim">Sim</option>
+          <option value="nao">Não</option>
+        </select>
+      </label>
+    </div>
+    <div class="action-row wx-actions">
+      <button type="button" class="run-btn" id="wxSaveBtn">Concluir</button>
+      <button type="button" class="ghost-btn" id="wxClearBtn">Limpar</button>
+    </div>
+  </div>
+</div>
+
 <template id="legTemplate">
   <div class="leg-card">
     <div class="leg-header">
       <span class="leg-number"></span>
       <span class="leg-route-label"></span>
+      <button type="button" class="ghost-btn small-btn wx-btn">WX</button>
     </div>
     <div class="form-grid form-grid-2">
       <label class="field">

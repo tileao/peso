@@ -233,8 +233,90 @@
     cards.forEach(function (card, i) {
       $('.leg-number', card).textContent = 'Perna ' + (i + 1);
       $('.leg-route-label', card).textContent = stops[i] + ' → ' + stops[i + 1];
+      updateWxButton(card);
     });
     $('#fuelPanel').hidden = wanted === 0;
+  }
+
+  // ---------------------------------------------------------------------
+  // Weather por perna (popup WX) — dados do destino da perna
+  // ---------------------------------------------------------------------
+
+  var WX_FIELDS = [
+    ['qnh', 'wxQnh'],
+    ['aproamento', 'wxAproamento'],
+    ['vento', 'wxVento'],
+    ['temperatura', 'wxTemp'],
+    ['pitch', 'wxPitch'],
+    ['roll', 'wxRoll'],
+    ['heave', 'wxHeave'],
+    ['heaveRate', 'wxHeaveRate'],
+    ['inclinacao', 'wxInclinacao'],
+    ['statusLight', 'wxStatusLight'],
+    ['helideckOk', 'wxHelideckOk']
+  ];
+
+  var wxCard = null;
+
+  function getLegWeather(card) {
+    try {
+      return card.dataset.weather ? JSON.parse(card.dataset.weather) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function updateWxButton(card) {
+    var btn = $('.wx-btn', card);
+    var has = !!getLegWeather(card);
+    btn.classList.toggle('wx-filled', has);
+    btn.textContent = has ? 'WX ✓' : 'WX';
+  }
+
+  function applyWxTypeVisibility() {
+    var isUm = document.getElementById('wxType').value === 'um';
+    $$('.wx-um-only').forEach(function (el) { el.hidden = !isUm; });
+  }
+
+  function guessWxType(dest) {
+    // Aeródromos ICAO brasileiros têm 4 letras começando com S; o resto
+    // tratamos como unidade marítima.
+    return /^S[A-Z]{3}$/.test(dest) ? 'aero' : 'um';
+  }
+
+  function openWxDialog(card) {
+    wxCard = card;
+    var dest = ($('.leg-route-label', card).textContent.split('→')[1] || '').trim();
+    var legNum = $('.leg-number', card).textContent;
+    document.getElementById('wxTitle').textContent = 'Weather — ' + dest + ' (' + legNum + ')';
+    var data = getLegWeather(card) || {};
+    document.getElementById('wxType').value = data.type || guessWxType(dest);
+    WX_FIELDS.forEach(function (f) {
+      document.getElementById(f[1]).value = data[f[0]] !== undefined ? data[f[0]] : '';
+    });
+    applyWxTypeVisibility();
+    document.getElementById('wxOverlay').hidden = false;
+  }
+
+  function saveWxDialog() {
+    if (!wxCard) return;
+    var data = { type: document.getElementById('wxType').value };
+    var hasAny = false;
+    WX_FIELDS.forEach(function (f) {
+      var v = document.getElementById(f[1]).value.trim();
+      data[f[0]] = v;
+      if (v !== '') hasAny = true;
+    });
+    if (hasAny) wxCard.dataset.weather = JSON.stringify(data);
+    else delete wxCard.dataset.weather;
+    updateWxButton(wxCard);
+  }
+
+  function closeWxDialog() {
+    saveWxDialog();
+    document.getElementById('wxOverlay').hidden = true;
+    wxCard = null;
+    scheduleRecalc();
   }
 
   // ---------------------------------------------------------------------
@@ -331,7 +413,8 @@
         landingFuelKg: parseNum($('.landing-fuel-actual-input', card).value),
         consumptionKg: parseNum($('.consumption-input', card).value),
         timeMin: parseNum($('.flight-time-input', card).value),
-        rateKgH: parseNum($('.fuel-rate-input', card).value)
+        rateKgH: parseNum($('.fuel-rate-input', card).value),
+        weather: getLegWeather(card)
       };
     });
   }
@@ -488,6 +571,15 @@
         }
       }
 
+      if (leg.weather && leg.weather.type === 'um') {
+        if (leg.weather.statusLight === 'vermelho') {
+          legIssues.push({ level: 'warn', message: 'Helideque de ' + stops[i + 1] + ': status light VERMELHO' });
+        }
+        if (leg.weather.helideckOk === 'nao') {
+          legIssues.push({ level: 'warn', message: 'Helideque de ' + stops[i + 1] + ': não guarnecido/liberado' });
+        }
+      }
+
       var cgTowMm = null, cgLwMm = null;
       if (isFinite(aircraft.bewArmMm)) {
         var cgEnv = getCgEnvelope(aircraft);
@@ -535,6 +627,7 @@
         watMargin: watMargin,
         cgTowMm: cgTowMm,
         cgLwMm: cgLwMm,
+        weather: leg.weather || null,
         issues: legIssues,
         status: worst
       });
@@ -595,9 +688,11 @@
   function updateAircraftSummary() {
     var el = document.getElementById('aircraftSummary');
     if (!el) return;
+    var parts = [];
+    var reg = document.getElementById('registrationInput').value.trim();
+    if (reg) parts.push(reg);
     var bew = parseNum(document.getElementById('bewKg').value);
     var cat = document.getElementById('mtowCategory').value;
-    var parts = [];
     parts.push(isFinite(bew) ? 'BEW ' + fmt(bew) : 'BEW —');
     parts.push('MTOW ' + fmt(parseNum(cat)));
     var cg = parseNum(document.getElementById('bewArmMm').value);
@@ -1099,6 +1194,11 @@
       if (critical.cgTowMm !== null && isFinite(critical.cgTowMm)) {
         updated.pesoCgTowMm = round1(critical.cgTowMm);
       }
+      var reg = document.getElementById('registrationInput').value.trim();
+      if (reg) updated.pesoMatricula = reg;
+      updated.pesoWeatherPorPerna = results.map(function (r) {
+        return { perna: r.index + 1, destino: r.destText, weather: r.weather };
+      });
       localStorage.setItem(SHARED_KEY, JSON.stringify(updated));
     } catch (e) { /* localStorage indisponível */ }
   }
@@ -1109,6 +1209,7 @@
 
   function serializeForm() {
     var aircraft = {
+      registration: document.getElementById('registrationInput').value,
       bewKg: document.getElementById('bewKg').value,
       crewKg: document.getElementById('crewKg').value,
       mtowCategory: document.getElementById('mtowCategory').value,
@@ -1136,7 +1237,8 @@
         consumption: $('.consumption-input', card).value,
         timeMin: $('.flight-time-input', card).value,
         rateKgH: $('.fuel-rate-input', card).value,
-        takeoffManual: $('.takeoff-fuel-input', card).dataset.manual === '1'
+        takeoffManual: $('.takeoff-fuel-input', card).dataset.manual === '1',
+        weather: getLegWeather(card)
       };
     });
     return {
@@ -1161,6 +1263,7 @@
     } catch (e) { data = null; }
 
     var a = (data && data.aircraft) || {};
+    if (a.registration !== undefined) document.getElementById('registrationInput').value = a.registration;
     if (a.bewKg !== undefined) document.getElementById('bewKg').value = a.bewKg;
     if (a.crewKg !== undefined) document.getElementById('crewKg').value = a.crewKg;
     if (a.mtowCategory !== undefined) document.getElementById('mtowCategory').value = a.mtowCategory;
@@ -1184,6 +1287,8 @@
       $('.flight-time-input', card).value = legData.timeMin || '';
       $('.fuel-rate-input', card).value = legData.rateKgH || '400';
       if (legData.takeoffManual) $('.takeoff-fuel-input', card).dataset.manual = '1';
+      if (legData.weather) card.dataset.weather = JSON.stringify(legData.weather);
+      updateWxButton(card);
       toggleConsumptionMode(card);
     });
 
@@ -1247,9 +1352,19 @@
     refreshManifestSelects();
   }
 
+  function forceUppercase(el) {
+    var pos = el.selectionStart;
+    var upper = el.value.toUpperCase();
+    if (el.value !== upper) {
+      el.value = upper;
+      try { el.setSelectionRange(pos, pos); } catch (e) { /* noop */ }
+    }
+  }
+
   function handleFormEvent(e) {
     var t = e.target;
     if (t.id === 'routeInput') handleRouteInput(t);
+    if (t.id === 'registrationInput') forceUppercase(t);
     if (t.classList.contains('consumption-mode-select')) {
       toggleConsumptionMode(t.closest('.leg-card'));
     }
@@ -1280,6 +1395,22 @@
         delete e.target.dataset.manual;
       }
       handleFormEvent(e);
+    });
+
+    legsContainer.addEventListener('click', function (e) {
+      var btn = e.target.closest('.wx-btn');
+      if (btn) openWxDialog(btn.closest('.leg-card'));
+    });
+
+    var wxOverlay = document.getElementById('wxOverlay');
+    document.getElementById('wxType').addEventListener('change', applyWxTypeVisibility);
+    document.getElementById('wxSaveBtn').addEventListener('click', closeWxDialog);
+    document.getElementById('wxCloseBtn').addEventListener('click', closeWxDialog);
+    document.getElementById('wxClearBtn').addEventListener('click', function () {
+      WX_FIELDS.forEach(function (f) { document.getElementById(f[1]).value = ''; });
+    });
+    wxOverlay.addEventListener('click', function (e) {
+      if (e.target === wxOverlay) closeWxDialog();
     });
 
     manifestRowsContainer.addEventListener('click', function (e) {
@@ -1323,6 +1454,7 @@
     document.getElementById('resetBtn').addEventListener('click', function () {
       if (!window.confirm('Limpar todos os dados do formulário?')) return;
       try { localStorage.removeItem(FORM_KEY); } catch (e) { /* noop */ }
+      document.getElementById('registrationInput').value = '';
       document.getElementById('bewKg').value = '';
       document.getElementById('crewKg').value = '170';
       document.getElementById('mtowCategory').value = '7000';
@@ -1404,7 +1536,10 @@
       if (e.target === fullscreenOverlay) fullscreenOverlay.hidden = true;
     });
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !fullscreenOverlay.hidden) fullscreenOverlay.hidden = true;
+      if (e.key !== 'Escape') return;
+      var wx = document.getElementById('wxOverlay');
+      if (!wx.hidden) { closeWxDialog(); return; }
+      if (!fullscreenOverlay.hidden) fullscreenOverlay.hidden = true;
     });
 
     window.addEventListener('resize', function () {

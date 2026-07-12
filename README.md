@@ -7,9 +7,10 @@ de cada perna.
 
 ## Fluxo de uso
 
-1. **Aeronave** (painel recolhível, configura uma vez): BEW, tripulação,
-   categoria de peso (6800/7000), peso máx. de pouso, combustível mínimo,
-   CG do peso vazio e braços de pax e bag/carga.
+1. **Aeronave** (painel recolhível, configura uma vez): matrícula (aparece
+   na linha-resumo para identificar de qual aeronave são os dados), BEW,
+   tripulação, categoria de peso (6800/7000), peso máx. de pouso,
+   combustível mínimo, CG do peso vazio e braços de pax e bag/carga.
 2. **Rota**: uma linha com as localidades em sequência (maiúsculas
    automáticas) — ex.: `SBMI FPAB P74 FPAB SBMI` monta 4 pernas. Botão
    "Voo de volta" duplica a rota invertida.
@@ -24,6 +25,15 @@ de cada perna.
    perna — a decolagem das pernas seguintes já vem sugerida no quadro da
    própria perna (pouso anterior − 50 kg de consumo em solo/APU), editável.
    Alternativas por perna: consumo estimado (kg) ou tempo × taxa (kg/h).
+5. **Weather por perna (botão WX)**: cada perna tem um popup de meteorologia
+   do destino. Para unidade marítima (UM), na ordem: QNH, aproamento, vento,
+   temperatura, pitch, roll, heave, heave rate, inclinação, status light
+   (verde/vermelho) e helideque guarnecido e liberado; para aeródromo
+   (código ICAO Sxxx, detectado automaticamente): QNH, vento e temperatura.
+   Status light vermelho ou helideque não liberado geram alerta âmbar. Os
+   dados ficam salvos com o formulário e são gravados no contexto
+   compartilhado (`pesoWeatherPorPerna`) para alimentar os demais módulos —
+   primeiro passo da evolução deste módulo para o "módulo voo" da suíte.
 
 ## O que mostra
 
